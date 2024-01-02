@@ -1000,6 +1000,8 @@ fn print_canvas(canvas: &Canvas) {
 
 fn main() {
     let term_size = crossterm::terminal::window_size().unwrap();
+    let mut terminal_columns = term_size.columns as usize;
+    let mut terminal_rows = term_size.rows as usize;
     let layout = Layout::HorizontalStack(VerticalAlignment::Top, vec![
         Layout::text("Main content")
             .center_horizontally()
@@ -1022,7 +1024,7 @@ fn main() {
         .padding_vertical(2)
     ]);
 
-    let bounds = &Rect::sized(term_size.columns as usize, term_size.rows as usize);
+    let bounds = &Rect::sized(terminal_columns, terminal_rows);
     // let bounds = &Rect::sized(20, 5);
     let mut canvas = Canvas::create_in_bounds(bounds);
 
@@ -1031,10 +1033,33 @@ fn main() {
     canvas.render_layout(&layout);
 
     crossterm::execute!(std::io::stdout(), crossterm::terminal::EnterAlternateScreen).unwrap();
+    loop {
+        print_canvas(&canvas);
+        
+        let _waiting = match crossterm::event::read() {
+            Ok(event) => {
+                if let crossterm::event::Event::Key(k) = event {
+                    if k.code == crossterm::event::KeyCode::Esc {
+                        break;
+                    }
+                } else if let crossterm::event::Event::Resize(columns, rows) = event {
+                    terminal_columns = columns as usize;
+                    terminal_rows = rows as usize;
 
-    print_canvas(&canvas);
-    
-    let waiting = crossterm::event::read();
+                    let bounds = &Rect::sized(terminal_columns, terminal_rows);
+                    canvas = Canvas::create_in_bounds(bounds);
+
+                    canvas.render_layout(&layout);
+                }
+            }
+            Err(err) => {
+                println!("{err:?}");
+                break;
+            }
+        };
+        
+        crossterm::execute!(std::io::stdout(), crossterm::terminal::Clear(crossterm::terminal::ClearType::Purge)).unwrap();
+    }
 
     crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen).unwrap();
 }
