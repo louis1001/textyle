@@ -8,3 +8,4 @@ macro_rules! hash_set {
 
 pub mod layout;
 pub mod canvas;
+pub mod animation;

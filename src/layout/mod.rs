@@ -2,116 +2,72 @@ use std::collections::HashSet;
 
 pub mod sizing;
 pub mod alignment;
+pub mod geometry;
 
-#[derive(Clone, Debug)]
-pub struct Rect {
-    pub x: i64,
-    pub y: i64,
-    pub width: usize,
-    pub height: usize,
-}
+use geometry::Rect;
 
-impl Rect {
-    pub fn new(x: i64, y: i64, width: usize, height: usize) -> Self {
-        Self {
-            x,
-            y,
-            width,
-            height,
-        }
-    }
+#[derive(Clone)]
+pub enum Layout<Ctx> {
+    Text(String),
+    Width(usize, Box<Layout<Ctx>>),
+    Height(usize, Box<Layout<Ctx>>),
+    TopPadding(usize, Box<Layout<Ctx>>),
+    RightPadding(usize, Box<Layout<Ctx>>),
+    BottomPadding(usize, Box<Layout<Ctx>>),
+    LeftPadding(usize, Box<Layout<Ctx>>),
+    VCenter(Box<Layout<Ctx>>),
+    HCenter(Box<Layout<Ctx>>),
+    VBottomAlign(Box<Layout<Ctx>>),
+    HRightAlign(Box<Layout<Ctx>>),
+    VTopAlign(Box<Layout<Ctx>>),
+    HLeftAlign(Box<Layout<Ctx>>),
+    Background(char, Box<Layout<Ctx>>),
+    Border(usize, char, HashSet<alignment::Edge>, Box<Layout<Ctx>>),
 
-    pub fn zero() -> Self {
-        Rect {
-            x: 0,
-            y: 0,
-            width: 0,
-            height: 0,
-        }
-    }
+    VerticalStack(alignment::HorizontalAlignment, Vec<Layout<Ctx>>),
+    HorizontalStack(alignment::VerticalAlignment, Vec<Layout<Ctx>>),
 
-    pub fn sized(width: usize, height: usize) -> Self {
-        Self {
-            x: 0,
-            y: 0,
-            width,
-            height,
-        }
-    }
-
-    // Utilities
-    pub fn max_x(&self) -> i64 {
-        self.x + self.width as i64
-    }
-
-    pub fn max_y(&self) -> i64 {
-        self.y + self.height as i64
-    }
-}
-
-impl Default for Rect {
-    fn default() -> Self {
-        Self::zero()
-    }
+    DrawCanvas(fn(&Ctx, &Rect)->crate::canvas::TextCanvas),
+    WithContext(fn(&Ctx)->Layout<Ctx>)
 }
 
 #[derive(Clone)]
-pub enum Layout {
+pub enum SizedNode<Ctx: Clone> {
     Text(String),
-    Width(usize, Box<Layout>),
-    Height(usize, Box<Layout>),
-    TopPadding(usize, Box<Layout>),
-    RightPadding(usize, Box<Layout>),
-    BottomPadding(usize, Box<Layout>),
-    LeftPadding(usize, Box<Layout>),
-    VCenter(Box<Layout>),
-    HCenter(Box<Layout>),
-    VBottomAlign(Box<Layout>),
-    HRightAlign(Box<Layout>),
-    VTopAlign(Box<Layout>),
-    HLeftAlign(Box<Layout>),
-    Background(char, Box<Layout>),
-    Border(usize, char, HashSet<alignment::Edge>, Box<Layout>),
+    Width(usize, SizedLayout<Ctx>),
+    Height(usize, SizedLayout<Ctx>),
+    TopPadding(usize, SizedLayout<Ctx>),
+    RightPadding(usize, SizedLayout<Ctx>),
+    BottomPadding(usize, SizedLayout<Ctx>),
+    LeftPadding(usize, SizedLayout<Ctx>),
+    VCenter(SizedLayout<Ctx>),
+    HCenter(SizedLayout<Ctx>),
+    VBottomAlign(SizedLayout<Ctx>),
+    HRightAlign(SizedLayout<Ctx>),
+    VTopAlign(SizedLayout<Ctx>),
+    HLeftAlign(SizedLayout<Ctx>),
+    Background(char, SizedLayout<Ctx>),
+    Border(usize, char, HashSet<alignment::Edge>, SizedLayout<Ctx>),
 
-    VerticalStack(alignment::HorizontalAlignment, Vec<Layout>),
-    HorizontalStack(alignment::VerticalAlignment, Vec<Layout>),
+    VerticalStack(alignment::HorizontalAlignment, Vec<SizedLayout<Ctx>>),
+    HorizontalStack(alignment::VerticalAlignment, Vec<SizedLayout<Ctx>>),
+
+    DrawCanvas(fn(&Ctx, &Rect)->crate::canvas::TextCanvas)
 }
 
-#[derive(Clone, Debug)]
-pub enum SizedNode {
-    Text(String),
-    Width(usize, SizedLayout),
-    Height(usize, SizedLayout),
-    TopPadding(usize, SizedLayout),
-    RightPadding(usize, SizedLayout),
-    BottomPadding(usize, SizedLayout),
-    LeftPadding(usize, SizedLayout),
-    VCenter(SizedLayout),
-    HCenter(SizedLayout),
-    VBottomAlign(SizedLayout),
-    HRightAlign(SizedLayout),
-    VTopAlign(SizedLayout),
-    HLeftAlign(SizedLayout),
-    Background(char, SizedLayout),
-    Border(usize, char, HashSet<alignment::Edge>, SizedLayout),
-
-    VerticalStack(alignment::HorizontalAlignment, Vec<SizedLayout>),
-    HorizontalStack(alignment::VerticalAlignment, Vec<SizedLayout>),
-}
-
-#[derive(Clone, Debug)]
-pub struct SizedLayout {
-    pub node: Box<SizedNode>,
+#[derive(Clone)]
+pub struct SizedLayout<Ctx: Clone> {
+    pub node: Box<SizedNode<Ctx>>,
     pub sizing: sizing::ItemSizing
 }
 
-impl SizedLayout {
-    fn new(node: SizedNode, sizing: sizing::ItemSizing) -> Self {
+impl<Ctx: Clone> SizedLayout<Ctx> {
+    fn new(node: SizedNode<Ctx>, sizing: sizing::ItemSizing) -> Self {
         SizedLayout { node: Box::new(node), sizing }
     }
 }
 
-impl Layout {
+impl<Ctx: Clone> Layout<Ctx> {
     fn calculate_line_size(&self, line: &str, bounds: &Rect) -> Rect {
         use unicode_segmentation::UnicodeSegmentation;
         let graphemes = line.graphemes(true).collect::<Vec<_>>();
@@ -124,7 +80,7 @@ impl Layout {
         }
     }
 
-    pub fn resolve_size(&self, bounds: &Rect) -> SizedLayout {
+    pub fn resolve_size(&self, bounds: &Rect, context: &Ctx) -> SizedLayout<Ctx> {
         use Layout::*;
         use sizing::Sizing::*;
 
@@ -148,7 +104,7 @@ impl Layout {
                 SizedLayout::new(SizedNode::Text(t.clone()), sizing)
             }
             VCenter(node) => {
-                let resolved = node.resolve_size(bounds);
+                let resolved = node.resolve_size(bounds, context);
                 let content_size = resolved.sizing.clone();
 
                 let min_height = content_size.vertical.min_content_size();
@@ -158,7 +114,7 @@ impl Layout {
                 SizedLayout::new(SizedNode::VCenter(resolved), sizing)
             }
             VBottomAlign(node) => {
-                let resolved = node.resolve_size(bounds);
+                let resolved = node.resolve_size(bounds, context);
                 let content_size = resolved.sizing.clone();
 
                 let min_height = content_size.vertical.min_content_size();
@@ -168,7 +124,7 @@ impl Layout {
                 SizedLayout::new(SizedNode::VBottomAlign(resolved), sizing)
             }
             HCenter(node) => {
-                let resolved = node.resolve_size(bounds);
+                let resolved = node.resolve_size(bounds, context);
                 let content_size = resolved.sizing.clone();
 
                 let min_width = content_size.horizontal.min_content_size();
@@ -178,7 +134,7 @@ impl Layout {
                 SizedLayout::new(SizedNode::HCenter(resolved), sizing)
             }
             HRightAlign(node) => {
-                let resolved = node.resolve_size(bounds);
+                let resolved = node.resolve_size(bounds, context);
                 let content_size = resolved.sizing.clone();
 
                 let min_width = content_size.horizontal.min_content_size();
@@ -188,7 +144,7 @@ impl Layout {
                 SizedLayout::new(SizedNode::HRightAlign(resolved), sizing)
             }
             VTopAlign(node) => {
-                let resolved = node.resolve_size(bounds);
+                let resolved = node.resolve_size(bounds, context);
                 let content_size = resolved.sizing.clone();
 
                 let min_height = content_size.vertical.min_content_size();
@@ -198,7 +154,7 @@ impl Layout {
                 SizedLayout::new(SizedNode::VTopAlign(resolved), sizing)
             }
             HLeftAlign(node) => {
-                let resolved = node.resolve_size(bounds);
+                let resolved = node.resolve_size(bounds, context);
                 let content_size = resolved.sizing.clone();
 
                 let min_width = content_size.horizontal.min_content_size();
@@ -211,7 +167,7 @@ impl Layout {
                 let mut bounds = bounds.clone();
                 bounds.width = *size;
 
-                let resolved_content = node.resolve_size(&bounds);
+                let resolved_content = node.resolve_size(&bounds, context);
                 let mut frame = resolved_content.sizing.clone();
                 frame.horizontal = Static(*size);
 
@@ -221,14 +177,14 @@ impl Layout {
                 let mut bounds = bounds.clone();
                 bounds.height = *size;
 
-                let resolved_content = node.resolve_size(&bounds);
+                let resolved_content = node.resolve_size(&bounds, context);
                 let mut frame = resolved_content.sizing.clone();
                 frame.vertical = Static(*size);
 
                 SizedLayout::new(SizedNode::Height(*size, resolved_content), frame)
             }
             TopPadding(n, node) => {
-                let resolved = node.resolve_size(&bounds);
+                let resolved = node.resolve_size(&bounds, context);
                 let mut frame = resolved.sizing.clone();
                 
                 frame.vertical.clamped_add(*n);
@@ -238,7 +194,7 @@ impl Layout {
                     let mut bounds = bounds.clone();
                     bounds.height = bounds.height.checked_sub(*n).unwrap_or(0);
 
-                    let resolved_content = node.resolve_size(&bounds);
+                    let resolved_content = node.resolve_size(&bounds, context);
                     let mut sizing = resolved_content.sizing.clone();
 
                     sizing.vertical.clamped_add(*n);
@@ -249,7 +205,7 @@ impl Layout {
                 }
             }
             RightPadding(n, node) => {
-                let resolved = node.resolve_size(&bounds);
+                let resolved = node.resolve_size(&bounds, context);
                 let mut frame = resolved.sizing.clone();
                 
                 frame.horizontal.clamped_add(*n);
@@ -258,7 +214,7 @@ impl Layout {
                     let mut bounds = bounds.clone();
                     bounds.width = bounds.width.checked_sub(*n).unwrap_or(0);
 
-                    let resolved_content = node.resolve_size(&bounds);
+                    let resolved_content = node.resolve_size(&bounds, context);
                     frame = resolved_content.sizing.clone();
                     frame.horizontal.clamped_add(*n);
 
@@ -268,7 +224,7 @@ impl Layout {
                 }
             }
             BottomPadding(n, node) => {
-                let resolved = node.resolve_size(&bounds);
+                let resolved = node.resolve_size(&bounds, context);
                 let mut frame = resolved.sizing.clone();
                 
                 frame.vertical.clamped_add(*n);
@@ -277,7 +233,7 @@ impl Layout {
                     let mut bounds = bounds.clone();
                     bounds.height = bounds.height.checked_sub(*n).unwrap_or(0);
 
-                    let resolved_content = node.resolve_size(&bounds);
+                    let resolved_content = node.resolve_size(&bounds, context);
                     let mut frame = resolved_content.sizing.clone();
 
                     frame.vertical.clamped_add(*n);
@@ -288,7 +244,7 @@ impl Layout {
                 }
             }
             LeftPadding(n, node) => {
-                let resolved = node.resolve_size(&bounds);
+                let resolved = node.resolve_size(&bounds, context);
                 let mut frame = resolved.sizing.clone();
                 
                 frame.horizontal.clamped_add(*n);
@@ -297,7 +253,7 @@ impl Layout {
                     let mut bounds = bounds.clone();
                     bounds.width -= n;
 
-                    let resolved_content = node.resolve_size(&bounds);
+                    let resolved_content = node.resolve_size(&bounds, context);
                     let mut frame = resolved_content.sizing.clone();
 
                     frame.horizontal.clamped_add(*n);
@@ -308,13 +264,13 @@ impl Layout {
                 }
             }
             Background(c, node) => {
-                let resolved_content = node.resolve_size(&bounds);
+                let resolved_content = node.resolve_size(&bounds, context);
                 let frame = resolved_content.sizing.clone();
 
                 SizedLayout::new(SizedNode::Background(*c, resolved_content), frame)
             }
             Border(n, c, edges, node) => {
-                let mut resolved_content = node.resolve_size(&bounds);
+                let mut resolved_content = node.resolve_size(&bounds, context);
                 let mut frame = resolved_content.sizing.clone();
                 
                 if edges.contains(&alignment::Edge::Top) {
@@ -329,7 +285,7 @@ impl Layout {
                     let mut bounds = bounds.clone();
                     bounds.height = bounds.height.checked_sub(*n).unwrap_or(0);
 
-                    resolved_content = node.resolve_size(&bounds);
+                    resolved_content = node.resolve_size(&bounds, context);
                     frame = resolved_content.sizing.clone();
 
                     frame.vertical.clamped_add(*n);
@@ -347,7 +303,7 @@ impl Layout {
                     let mut bounds = bounds.clone();
                     bounds.width = bounds.width.checked_sub(*n).unwrap_or(0);
 
-                    resolved_content = node.resolve_size(&bounds);
+                    resolved_content = node.resolve_size(&bounds, context);
                     frame = resolved_content.sizing.clone();
 
                     frame.horizontal.clamped_add(*n);
@@ -358,10 +314,10 @@ impl Layout {
 
             VerticalStack(alignment, nodes) => {
                 let mut result = sizing::ItemSizing { horizontal: Static(0), vertical: Static(0) };
-                let mut resolved_children: Vec<SizedLayout> = vec![];
+                let mut resolved_children: Vec<SizedLayout<_>> = vec![];
 
                 for node in nodes {
-                    let resolved_node = node.resolve_size(bounds);
+                    let resolved_node = node.resolve_size(bounds, context);
                     let node_sizing = resolved_node.sizing.clone();
                     result.horizontal = match result.horizontal {
                         Static(j) => match node_sizing.horizontal {
@@ -385,7 +341,7 @@ impl Layout {
                 let mut resolved_children = vec![];
 
                 for node in nodes {
-                    let resolved_node = node.resolve_size(bounds);
+                    let resolved_node = node.resolve_size(bounds, context);
                     let node_sizing = resolved_node.sizing.clone();
                     result.vertical = match result.vertical {
                         Static(j) => match node_sizing.vertical {
@@ -405,56 +361,70 @@ impl Layout {
 
                 SizedLayout::new(SizedNode::HorizontalStack(alignment.clone(), resolved_children), result)
             }
+            DrawCanvas(action) => {
+                SizedLayout::new(
+                    SizedNode::DrawCanvas(*action),
+                    sizing::ItemSizing::new(
+                        sizing::Sizing::Greedy(1),
+                        sizing::Sizing::Greedy(1)
+                    )
+                )
+            },
+            WithContext(node) => {
+                let node = node(context);
+
+                node.resolve_size(bounds, context)
+            }
         }
     }
 }
 
-impl Layout {
-    pub fn text(content: &str) -> Layout {
+impl<Ctx> Layout<Ctx> {
+    pub fn text(content: &str) -> Layout<Ctx> {
         Layout::Text(content.to_string())
     }
 
-    pub fn center(self) -> Layout {
+    pub fn center(self) -> Layout<Ctx> {
         Layout::VCenter(Box::new(Layout::HCenter(Box::new(self))))
     }
 
-    pub fn center_vertically(self) -> Layout {
+    pub fn center_vertically(self) -> Layout<Ctx> {
         Layout::VCenter(Box::new(self))
     }
 
-    pub fn center_horizontally(self) -> Layout {
+    pub fn center_horizontally(self) -> Layout<Ctx> {
         Layout::HCenter(Box::new(self))
     }
 
-    pub fn width(self, n: usize) -> Layout {
+    pub fn width(self, n: usize) -> Layout<Ctx> {
         Layout::Width(n, Box::new(self))
     }
     
-    pub fn padding_top(self, n: usize) -> Layout {
+    pub fn padding_top(self, n: usize) -> Layout<Ctx> {
         Layout::TopPadding(n, Box::new(self))
     }
     
-    pub fn padding_bottom(self, n: usize) -> Layout {
+    pub fn padding_bottom(self, n: usize) -> Layout<Ctx> {
         Layout::BottomPadding(n, Box::new(self))
     }
 
-    pub fn padding_left(self, n: usize) -> Layout {
+    pub fn padding_left(self, n: usize) -> Layout<Ctx> {
         Layout::LeftPadding(n, Box::new(self))
     }
     
-    pub fn padding_right(self, n: usize) -> Layout {
+    pub fn padding_right(self, n: usize) -> Layout<Ctx> {
         Layout::RightPadding(n, Box::new(self))
     }
 
-    pub fn padding_horizontal(self, n: usize) -> Layout {
+    pub fn padding_horizontal(self, n: usize) -> Layout<Ctx> {
         self.padding_left(n).padding_right(n)
     }
 
-    pub fn padding_vertical(self, n: usize) -> Layout {
+    pub fn padding_vertical(self, n: usize) -> Layout<Ctx> {
         self.padding_top(n).padding_bottom(n)
     }
 
-    pub fn padding(self, n: usize) -> Layout {
+    pub fn padding(self, n: usize) -> Layout<Ctx> {
         self
             .padding_top(n)
             .padding_right(n)
@@ -462,27 +432,35 @@ impl Layout {
             .padding_left(n)
     }
 
-    pub fn align_right(self) -> Layout {
+    pub fn align_right(self) -> Layout<Ctx> {
         Layout::HRightAlign(Box::new(self))
     }
 
-    pub fn align_left(self) -> Layout {
+    pub fn align_left(self) -> Layout<Ctx> {
         Layout::HLeftAlign(Box::new(self))
     }
 
-    pub fn align_top(self) -> Layout {
+    pub fn align_top(self) -> Layout<Ctx> {
         Layout::VTopAlign(Box::new(self))
     }
 
-    pub fn align_bottom(self) -> Layout {
+    pub fn align_bottom(self) -> Layout<Ctx> {
         Layout::VBottomAlign(Box::new(self))
     }
 
-    pub fn border(self, n: usize, c: char, edges: HashSet<alignment::Edge>) -> Layout {
+    pub fn border(self, n: usize, c: char, edges: HashSet<alignment::Edge>) -> Layout<Ctx> {
         Layout::Border(n, c, edges, Box::new(self))
     }
 
-    pub fn background(self, c: char) -> Layout {
+    pub fn background(self, c: char) -> Layout<Ctx> {
         Layout::Background(c, Box::new(self))
+    }
+
+    pub fn vertical_stack(nodes: Vec<Layout<Ctx>>) -> Layout<Ctx> {
+        Layout::VerticalStack(alignment::HorizontalAlignment::Center, nodes)
+    }
+    
+    pub fn horizontal_stack(nodes: Vec<Layout<Ctx>>) -> Layout<Ctx> {
+        Layout::HorizontalStack(alignment::VerticalAlignment::Center, nodes)
     }
 }
