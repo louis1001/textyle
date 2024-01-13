@@ -15,10 +15,10 @@ fn main() -> Result<()> {
 
 fn app(_ctx: &AnimationContext) -> Layout<AnimationContext> {
     let graph = Layout::DrawCanvas(|ctx: &AnimationContext, bounds| {
-        let mut canvas = TextCanvas::create_in_bounds(bounds);
+        let mut canvas = TextCanvas::create_in_bounds(&bounds.size());
 
         for x in 0..bounds.width {
-            let xf = (x as f64) * 0.1 + (ctx.frame_count as f64 / 30.0);
+            let xf = (x as f64) * 0.1 + (ctx.frame_count as f64 / 60.0);
             let height = xf.cos() / 2.4;
             let border = (height * bounds.height as f64) as i64 + (bounds.height as i64/2);
             for y in 0..bounds.height {

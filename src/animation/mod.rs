@@ -2,7 +2,7 @@ use std::io::Write;
 
 use anyhow::Result;
 
-use crate::{canvas::TextCanvas, layout::{geometry::Rect, Layout}};
+use crate::{canvas::TextCanvas, layout::{geometry::Size, Layout}};
 use defer_lite::defer;
 
 #[derive(Clone)]
@@ -38,7 +38,7 @@ impl AnimatedTextCanvas {
         let mut terminal_columns = terminal_columns as usize;
         let mut terminal_rows = terminal_rows as usize;
 
-        let bounds = &Rect::sized(terminal_columns as usize, terminal_rows as usize);
+        let bounds = &Size::new(terminal_columns as usize, terminal_rows as usize);
         // let bounds = &Rect::sized(20, 5);
         let mut canvas = TextCanvas::create_in_bounds(bounds);
 
@@ -66,7 +66,7 @@ impl AnimatedTextCanvas {
         loop {
             context.delta_milis = last_time.elapsed().as_secs_f64().clamp(0.000001, f64::MAX) * 1000.0;
             last_time = std::time::Instant::now();
-            canvas.print_canvas();
+            canvas.draw_on_buffer();
             
             if crossterm::event::poll(std::time::Duration::from_millis(1))? {
                 match crossterm::event::read() {
@@ -79,7 +79,7 @@ impl AnimatedTextCanvas {
                             terminal_columns = columns as usize;
                             terminal_rows = rows as usize;
         
-                            let bounds = &Rect::sized(terminal_columns, terminal_rows);
+                            let bounds = &Size::new(terminal_columns, terminal_rows);
                             canvas = TextCanvas::create_in_bounds(bounds);
                         }
                     }

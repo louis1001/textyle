@@ -1,30 +1,30 @@
 use crate::layout;
 
-use layout::geometry::Rect;
+use layout::geometry::{Rect, Size};
 
 pub struct TextCanvas {
-    bounds: Rect,
+    size: Size,
     contents: Vec<String>,
 }
 
 impl TextCanvas {
     pub fn new() -> Self {
         TextCanvas {
-            bounds: Rect::zero(),
+            size: Size::zero(),
             contents: Vec::new(),
         }
     }
 
-    pub fn create_in_bounds(bounds: &Rect) -> Self {
+    pub fn create_in_bounds(size: &Size) -> Self {
         TextCanvas {
-            bounds: bounds.clone(),
-            contents: vec![" ".to_string(); bounds.width * bounds.height],
+            size: size.clone(),
+            contents: vec![" ".to_string(); size.width * size.height],
         }
     }
 
     pub fn create(width: usize, height: usize) -> Self {
         TextCanvas {
-            bounds: Rect::sized(width, height),
+            size: Size::new(width, height),
             contents: vec![" ".to_string(); width * height],
         }
     }
@@ -32,19 +32,19 @@ impl TextCanvas {
 
 impl TextCanvas {
     fn get_at(&self, x: usize, y: usize) -> Option<&str> {
-        if x >= self.bounds.width || y >= self.bounds.height {
+        if x >= self.size.width || y >= self.size.height {
             return None;
         }
 
-        let index = y * self.bounds.width + x;
+        let index = y * self.size.width + x;
 
         Some(self.contents[index].as_str())
     }
 
     pub fn write(&mut self, grapheme: &str, x: usize, y: usize) {
-        if x >= self.bounds.width || y >= self.bounds.height { return; }
+        if x >= self.size.width || y >= self.size.height { return; }
 
-        let index = y * self.bounds.width + x;
+        let index = y * self.size.width + x;
 
         self.contents[index] = grapheme.to_string();
     }
@@ -52,8 +52,8 @@ impl TextCanvas {
     fn draw_rect(&mut self, bounds: &Rect, grapheme: &str) {
         for x in bounds.x..(bounds.x + bounds.width as i64) {
             for y in bounds.y..(bounds.y + bounds.height as i64) {
-                if x < 0 || x >= self.bounds.width as i64 { continue; }
-                if y < 0 || y >= self.bounds.height as i64 { continue; }
+                if x < 0 || x >= self.size.width as i64 { continue; }
+                if y < 0 || y >= self.size.height as i64 { continue; }
 
                 self.write(grapheme, x as usize, y as usize);
             }
@@ -61,8 +61,8 @@ impl TextCanvas {
     }
     
     fn paste_canvas(&mut self, other: &TextCanvas, bounds: &Rect) {
-        assert_eq!(other.bounds.width, bounds.width);
-        assert_eq!(other.bounds.height, bounds.height);
+        assert_eq!(other.size.width, bounds.width);
+        assert_eq!(other.size.height, bounds.height);
         
         for x in 0..bounds.width {
             for y in 0..bounds.height {
@@ -77,7 +77,7 @@ impl TextCanvas {
     }
 
     pub fn clear_with(&mut self, grapheme: &str) {
-        self.draw_rect(&self.bounds.clone(), grapheme);
+        self.draw_rect(&Rect::from_size(&self.size), grapheme);
     }
 }
 
@@ -167,6 +167,16 @@ impl TextCanvas {
 
                 self.render(&node, &frame, context);
             }
+            BottomPadding(n, node) => {
+                let mut bounds = bounds.clone();
+                bounds.height = bounds.height.checked_sub(n).unwrap_or(0);
+
+                let mut frame = node.sizing.fit_into(&bounds);
+                frame.x = bounds.x;
+                frame.y = bounds.y;
+
+                self.render(&node, &frame, context);
+            }
             RightPadding(n, node) => {
                 let mut frame = node.sizing.fit_into(&bounds);
                 frame.x = bounds.x;
@@ -176,16 +186,6 @@ impl TextCanvas {
                 let adjustment = frame.width.checked_sub(free_width).unwrap_or(0);
 
                 frame.width = frame.width.checked_sub(adjustment).unwrap_or(0);
-
-                self.render(&node, &frame, context);
-            }
-            BottomPadding(n, node) => {
-                let mut bounds = bounds.clone();
-                bounds.height = bounds.height.checked_sub(n).unwrap_or(0);
-
-                let mut frame = node.sizing.fit_into(&bounds);
-                frame.x = bounds.x;
-                frame.y = bounds.y;
 
                 self.render(&node, &frame, context);
             }
@@ -246,7 +246,7 @@ impl TextCanvas {
             VerticalStack(alignment, nodes) => {
                 let mut max_width = 0usize;
 
-                let mut last_bounds = Rect::new(0, 0, 0, 0);
+                let mut last_bounds = Rect::zero();
 
                 let mut greedy_count = 0;
                 let mut static_height = 0usize;
@@ -331,7 +331,7 @@ impl TextCanvas {
             HorizontalStack(alignment, nodes) => {
                 let mut max_height = 0usize;
 
-                let mut last_bounds = Rect::new(0, 0, 0, 0);
+                let mut last_bounds = Rect::zero();
 
                 let mut greedy_count = 0;
                 let mut static_width = 0usize;
@@ -422,13 +422,14 @@ impl TextCanvas {
     }
     
     pub fn render_layout<Ctx: Clone>(&mut self, layout: &layout::Layout<Ctx>, context: &Ctx) {
-        let layout = layout.resolve_size(&self.bounds, context);
-        let bounds = layout.sizing.fit_into(&self.bounds);
+        let self_bounds = Rect::sized(self.size.width, self.size.height);
+        let layout = layout.resolve_size(&self_bounds, context);
+        let bounds = layout.sizing.fit_into(&self_bounds);
 
         self.render(&layout, &bounds, context);
     }
 
-    pub fn print_canvas(&self) {
+    pub fn draw_on_buffer(&self) {
         use std::io::Write;
         let chars = self.contents.clone();
         let mut stdout = std::io::stdout();
@@ -436,8 +437,24 @@ impl TextCanvas {
             let c = &chars[n];
             let _ = crossterm::queue!(stdout, crossterm::style::Print(format!("{c}")));
     
-            if n < chars.len()-1 && (n + 1) % self.bounds.width == 0 {
-                let _ = crossterm::queue!(stdout, crossterm::cursor::MoveDown(1), crossterm::cursor::MoveToColumn(0));
+            if n < chars.len()-1 && (n + 1) % self.size.width == 0 {
+                let _ = crossterm::queue!(stdout, crossterm::cursor::MoveToNextLine(1) );
+            }
+        }
+    
+        let _ = stdout.flush();
+    }
+    
+    pub fn print(&self) {
+        use std::io::Write;
+        let chars = self.contents.clone();
+        let mut stdout = std::io::stdout();
+        for n in 0..chars.len() {
+            let c = &chars[n];
+            let _ = crossterm::queue!(stdout, crossterm::style::Print(format!("{c}")));
+    
+            if n < chars.len()-1 && (n + 1) % self.size.width == 0 {
+                let _ = crossterm::queue!(stdout, crossterm::style::Print(format!("\n")));
             }
         }
     

@@ -183,11 +183,19 @@ impl<Ctx: Clone> Layout<Ctx> {
 
                 SizedLayout::new(SizedNode::Height(*size, resolved_content), frame)
             }
-            TopPadding(n, node) => {
+            TopPadding(n, node) | BottomPadding(n, node) => {
                 let resolved = node.resolve_size(&bounds, context);
                 let mut frame = resolved.sizing.clone();
                 
                 frame.vertical.clamped_add(*n);
+
+                let make_node = |n: usize, node: SizedLayout<Ctx>|{
+                    match self {
+                        TopPadding(_, _) => SizedNode::TopPadding(n, node),
+                        BottomPadding(_, _) => SizedNode::BottomPadding(n, node),
+                        _ => unreachable!()
+                    }
+                };
 
                 if frame.vertical.min_content_size() > bounds.height {
                     // recalculate with less space
@@ -195,18 +203,26 @@ impl<Ctx: Clone> Layout<Ctx> {
                     bounds.height = bounds.height.checked_sub(*n).unwrap_or(0);
 
                     let resolved_content = node.resolve_size(&bounds, context);
-                    let mut sizing = resolved_content.sizing.clone();
+                    let mut frame = resolved_content.sizing.clone();
 
-                    sizing.vertical.clamped_add(*n);
+                    frame.vertical.clamped_add(*n);
 
-                    SizedLayout::new(SizedNode::TopPadding(*n, resolved_content), sizing)
+                    SizedLayout::new(make_node(*n, resolved_content), frame)
                 } else {
-                    SizedLayout::new(SizedNode::TopPadding(*n, resolved), frame)
+                    SizedLayout::new(make_node(*n, resolved), frame)
                 }
             }
-            RightPadding(n, node) => {
+            LeftPadding(n, node) | RightPadding(n, node) => {
                 let resolved = node.resolve_size(&bounds, context);
                 let mut frame = resolved.sizing.clone();
+
+                let make_node = |n: usize, node: SizedLayout<Ctx>|{
+                    match self {
+                        LeftPadding(_, _) => SizedNode::LeftPadding(n, node),
+                        RightPadding(_, _) => SizedNode::RightPadding(n, node),
+                        _ => unreachable!()
+                    }
+                };
                 
                 frame.horizontal.clamped_add(*n);
                 if frame.horizontal.min_content_size() > bounds.width {
@@ -218,49 +234,11 @@ impl<Ctx: Clone> Layout<Ctx> {
                     frame = resolved_content.sizing.clone();
                     frame.horizontal.clamped_add(*n);
 
-                    SizedLayout::new(SizedNode::RightPadding(*n, resolved_content), frame)
+                    let node = make_node(*n, resolved_content);
+
+                    SizedLayout::new(node, frame)
                 } else {
-                    SizedLayout::new(SizedNode::RightPadding(*n, resolved), frame)
-                }
-            }
-            BottomPadding(n, node) => {
-                let resolved = node.resolve_size(&bounds, context);
-                let mut frame = resolved.sizing.clone();
-                
-                frame.vertical.clamped_add(*n);
-                if frame.vertical.min_content_size() > bounds.height {
-                    // recalculate with less space
-                    let mut bounds = bounds.clone();
-                    bounds.height = bounds.height.checked_sub(*n).unwrap_or(0);
-
-                    let resolved_content = node.resolve_size(&bounds, context);
-                    let mut frame = resolved_content.sizing.clone();
-
-                    frame.vertical.clamped_add(*n);
-
-                    SizedLayout::new(SizedNode::BottomPadding(*n, resolved_content), frame)
-                } else {
-                    SizedLayout::new(SizedNode::BottomPadding(*n, resolved), frame)
-                }
-            }
-            LeftPadding(n, node) => {
-                let resolved = node.resolve_size(&bounds, context);
-                let mut frame = resolved.sizing.clone();
-                
-                frame.horizontal.clamped_add(*n);
-                if frame.horizontal.min_content_size() > bounds.width {
-                    // recalculate with less space
-                    let mut bounds = bounds.clone();
-                    bounds.width -= n;
-
-                    let resolved_content = node.resolve_size(&bounds, context);
-                    let mut frame = resolved_content.sizing.clone();
-
-                    frame.horizontal.clamped_add(*n);
-
-                    SizedLayout::new(SizedNode::LeftPadding(*n, resolved_content), frame)
-                } else {
-                    SizedLayout::new(SizedNode::LeftPadding(*n, resolved), frame)
+                    SizedLayout::new(make_node(*n, resolved), frame)
                 }
             }
             Background(c, node) => {
@@ -270,7 +248,8 @@ impl<Ctx: Clone> Layout<Ctx> {
                 SizedLayout::new(SizedNode::Background(*c, resolved_content), frame)
             }
             Border(n, c, edges, node) => {
-                let mut resolved_content = node.resolve_size(&bounds, context);
+                let outer_bounds = bounds;
+                let mut resolved_content = node.resolve_size(&outer_bounds, context);
                 let mut frame = resolved_content.sizing.clone();
                 
                 if edges.contains(&alignment::Edge::Top) {
@@ -280,9 +259,9 @@ impl<Ctx: Clone> Layout<Ctx> {
                     frame.vertical.clamped_add(*n);
                 }
 
-                if frame.vertical.min_content_size() > bounds.height {
+                if frame.vertical.min_content_size() > outer_bounds.height {
                     // recalculate with less space
-                    let mut bounds = bounds.clone();
+                    let mut bounds = outer_bounds.clone();
                     bounds.height = bounds.height.checked_sub(*n).unwrap_or(0);
 
                     resolved_content = node.resolve_size(&bounds, context);
@@ -298,9 +277,9 @@ impl<Ctx: Clone> Layout<Ctx> {
                     frame.horizontal.clamped_add(*n);
                 }
 
-                if frame.horizontal.min_content_size() > bounds.width {
+                if frame.horizontal.min_content_size() > outer_bounds.width {
                     // recalculate with less space
-                    let mut bounds = bounds.clone();
+                    let mut bounds = outer_bounds.clone();
                     bounds.width = bounds.width.checked_sub(*n).unwrap_or(0);
 
                     resolved_content = node.resolve_size(&bounds, context);
@@ -398,6 +377,10 @@ impl<Ctx> Layout<Ctx> {
 
     pub fn width(self, n: usize) -> Layout<Ctx> {
         Layout::Width(n, Box::new(self))
+    }
+    
+    pub fn height(self, n: usize) -> Layout<Ctx> {
+        Layout::Height(n, Box::new(self))
     }
     
     pub fn padding_top(self, n: usize) -> Layout<Ctx> {

@@ -34,6 +34,10 @@ impl Rect {
         }
     }
 
+    pub fn from_size(size: &Size) -> Self {
+        Self { x: 0, y: 0, width: size.width, height: size.height }
+    }
+
     // Utilities
     pub fn max_x(&self) -> i64 {
         self.x + self.width as i64
@@ -41,6 +45,10 @@ impl Rect {
 
     pub fn max_y(&self) -> i64 {
         self.y + self.height as i64
+    }
+
+    pub fn size(&self) -> Size {
+        Size::new(self.width, self.height)
     }
 }
 
@@ -74,5 +82,28 @@ impl Vector {
 impl Vector {
     pub fn magnitude(&self) -> f64 {
         ((self.x.pow(2) + self.y.pow(2)) as f64).sqrt()
+    }
+}
+
+#[derive(Clone)]
+pub struct Size {
+    pub width: usize,
+    pub height: usize
+}
+
+impl Size {
+    pub fn new(width: usize, height: usize) -> Self {
+        Size {
+            width,
+            height
+        }
+    }
+
+    pub fn zero() -> Self {
+        Size { width: 0, height: 0 }
+    }
+
+    pub fn to_vector(&self) -> Vector {
+        Vector::new(self.width as i64, self.height as i64)
     }
 }
