@@ -210,31 +210,23 @@ impl TextCanvas {
             Border(n, c, edges, node) => {
                 let outer_bounds = bounds;
                 let mut inner_bounds = bounds.clone();
-                if edges.contains(&layout::alignment::Edge::Top) {
-                    inner_bounds.height = inner_bounds.height.checked_sub(n).unwrap_or(0);
-                    inner_bounds.y = inner_bounds.y.checked_add(n as i64).unwrap_or(0);
-
-                    let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, outer_bounds.width, n);
-                    self.draw_rect(&line_bounds, &c.to_string())
-                }
-                if edges.contains(&layout::alignment::Edge::Right) {
-                    inner_bounds.width = inner_bounds.width.checked_sub(n).unwrap_or(0);
-
-                    let line_bounds = Rect::new(outer_bounds.max_x() - n as i64, outer_bounds.y, n, outer_bounds.height);
-                    self.draw_rect(&line_bounds, &c.to_string())
-                }
-                if edges.contains(&layout::alignment::Edge::Bottom) {
-                    inner_bounds.height = inner_bounds.height.checked_sub(n).unwrap_or(0);
-
-                    let line_bounds = Rect::new(outer_bounds.x, outer_bounds.max_y() - n as i64, outer_bounds.width, n);
-                    self.draw_rect(&line_bounds, &c.to_string())
-                }
-                if edges.contains(&layout::alignment::Edge::Left) {
-                    inner_bounds.width = inner_bounds.width.checked_sub(n).unwrap_or(0);
-                    inner_bounds.x = inner_bounds.x.checked_add(n as i64).unwrap_or(0);
-
-                    let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, n, outer_bounds.height);
-                    self.draw_rect(&line_bounds, &c.to_string())
+                for edge in &edges {
+                    match edge {
+                        layout::alignment::Edge::Top => {
+                            inner_bounds.height = inner_bounds.height.checked_sub(n).unwrap_or(0);
+                            inner_bounds.y = inner_bounds.y.checked_add(n as i64).unwrap_or(0);
+                        }
+                        layout::alignment::Edge::Right => {
+                            inner_bounds.width = inner_bounds.width.checked_sub(n).unwrap_or(0);
+                        }
+                        layout::alignment::Edge::Bottom => {
+                            inner_bounds.height = inner_bounds.height.checked_sub(n).unwrap_or(0);
+                        }
+                        layout::alignment::Edge::Left => {
+                            inner_bounds.width = inner_bounds.width.checked_sub(n).unwrap_or(0);
+                            inner_bounds.x = inner_bounds.x.checked_add(n as i64).unwrap_or(0);
+                        }
+                    }
                 }
 
                 let mut frame = node.sizing.fit_into(&inner_bounds);
@@ -242,6 +234,27 @@ impl TextCanvas {
                 frame.y = inner_bounds.y;
 
                 self.render(&node, &frame, context);
+
+                for edge in &edges {
+                    match edge {
+                        layout::alignment::Edge::Top => {
+                            let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, outer_bounds.width, n);
+                            self.draw_rect(&line_bounds, &c.to_string())
+                        }
+                        layout::alignment::Edge::Right => {
+                            let line_bounds = Rect::new(outer_bounds.max_x() - n as i64, outer_bounds.y, n, outer_bounds.height);
+                            self.draw_rect(&line_bounds, &c.to_string())
+                        }
+                        layout::alignment::Edge::Bottom => {
+                            let line_bounds = Rect::new(outer_bounds.x, outer_bounds.max_y() - n as i64, outer_bounds.width, n);
+                            self.draw_rect(&line_bounds, &c.to_string())
+                        }
+                        layout::alignment::Edge::Left => {
+                            let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, n, outer_bounds.height);
+                            self.draw_rect(&line_bounds, &c.to_string())
+                        }
+                    }
+                }
             }
             VerticalStack(alignment, nodes) => {
                 let mut max_width = 0usize;

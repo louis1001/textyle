@@ -358,7 +358,7 @@ impl<Ctx: Clone> Layout<Ctx> {
     }
 }
 
-impl<Ctx> Layout<Ctx> {
+impl<Ctx: Clone> Layout<Ctx> {
     pub fn text(content: &str) -> Layout<Ctx> {
         Layout::Text(content.to_string())
     }
