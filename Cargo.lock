@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "anyhow"
+version = "1.0.79"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "080e9890a082662b09c1ad45f567faeeb47f22b5fb23895fbe1e651e718e25ca"
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -50,6 +56,12 @@ checksum = "acdd7c62a3665c7f6830a51635d9ac9b23ed385797f70a83bb8bafe9c572ab2b"
 dependencies = [
  "winapi",
 ]
+
+[[package]]
+name = "defer-lite"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6a1ef0750c0fcdb9bd00e7829fcad58e9a0a2ab7078b57c39743b973f3878ce"
 
 [[package]]
 name = "libc"
@@ -163,7 +175,9 @@ checksum = "4dccd0940a2dcdf68d092b8cbab7dc0ad8fa938bf95787e1b916b0e3d0e8e970"
 name = "textyle"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "crossterm",
+ "defer-lite",
  "unicode-segmentation",
 ]
 
