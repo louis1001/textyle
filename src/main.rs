@@ -1,5 +1,5 @@
 use crossterm::event::KeyCode;
-use textyle::{animation::AnimationContext, canvas::TextCanvas, layout::{alignment::{Edge, HorizontalAlignment, VerticalAlignment}, geometry::{Matrix, Vector}, Layout}};
+use textyle::{animation::AnimationContext, layout::{alignment::{Edge, HorizontalAlignment, VerticalAlignment}, geometry::{Matrix, Vector}, Layout}};
 use anyhow::Result;
 use rand::prelude::*;
 
@@ -96,7 +96,7 @@ impl GameState {
                             prev_numbers[i] = value;
                         } else if prev_match == value {
                             let prev_match = prev_numbers[i];
-                            *new_data.get_mut(i,  prev_position as usize) = 0;
+                            *new_data.get_mut(i,  prev_position) = 0;
                             *new_data.get_mut(i,  j) = prev_match * 2;
 
                             prev_positions[i] = 5;
@@ -135,7 +135,7 @@ impl GameState {
                             prev_numbers[i] = value;
                         } else if prev_match == value {
                             let prev_match = prev_numbers[i];
-                            *new_data.get_mut(i,  prev_position as usize) = 0;
+                            *new_data.get_mut(i,  prev_position) = 0;
                             *new_data.get_mut(i,  j) = prev_match * 2;
 
                             prev_positions[i] = 5;
@@ -155,9 +155,7 @@ impl GameState {
                         if value != 0 {
                             *new_data.get_mut(i,  j) = 0;
                             *new_data.get_mut(i,  accumulator) = value;
-                            if accumulator > 0 {
-                                accumulator -= 1;
-                            }
+                            accumulator = accumulator.saturating_sub(1);
                         }
                     }
                 }
@@ -175,7 +173,7 @@ impl GameState {
                             prev_numbers[j] = value;
                         } else if prev_match == value {
                             let prev_match = prev_numbers[j];
-                            *new_data.get_mut(prev_position as usize,  j) = 0;
+                            *new_data.get_mut(prev_position,  j) = 0;
                             *new_data.get_mut(i,  j) = prev_match * 2;
 
                             prev_positions[j] = 5;
@@ -214,7 +212,7 @@ impl GameState {
                             prev_numbers[j] = value;
                         } else if prev_match == value {
                             let prev_match = prev_numbers[j];
-                            *new_data.get_mut(prev_position as usize,  j) = 0;
+                            *new_data.get_mut(prev_position,  j) = 0;
                             *new_data.get_mut(i,  j) = prev_match * 2;
 
                             prev_positions[j] = 5;
@@ -234,9 +232,7 @@ impl GameState {
                         if value != 0 {
                             *new_data.get_mut(i,  j) = 0;
                             *new_data.get_mut(accumulator,  j) = value;
-                            if accumulator > 0 {
-                                accumulator -= 1;
-                            }
+                            accumulator = accumulator.saturating_sub(1);
                         }
                     }
                 }
@@ -309,19 +305,16 @@ fn update(ctx: &mut AnimationContext<GameState>) {
     if ctx.state.game_over { return }
 
     while let Some(event) = events.pop() {
-        match event {
-            crossterm::event::Event::Key(k) => {
-                if k.kind == crossterm::event::KeyEventKind::Press {
-                    match k.code {
-                        KeyCode::Left => { ctx.state.collapse(GameDirection::Left) },
-                        KeyCode::Right => { ctx.state.collapse(GameDirection::Right) },
-                        KeyCode::Up => { ctx.state.collapse(GameDirection::Up) },
-                        KeyCode::Down => { ctx.state.collapse(GameDirection::Down) },
-                        _ => {}
-                    }
+        if let crossterm::event::Event::Key(k) = event {
+            if k.kind == crossterm::event::KeyEventKind::Press {
+                match k.code {
+                    KeyCode::Left => { ctx.state.collapse(GameDirection::Left) },
+                    KeyCode::Right => { ctx.state.collapse(GameDirection::Right) },
+                    KeyCode::Up => { ctx.state.collapse(GameDirection::Up) },
+                    KeyCode::Down => { ctx.state.collapse(GameDirection::Down) },
+                    _ => {}
                 }
             }
-            _ => {}
         }
     }
 

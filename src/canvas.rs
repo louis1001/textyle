@@ -7,6 +7,12 @@ pub struct TextCanvas {
     contents: Vec<String>,
 }
 
+impl Default for TextCanvas {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TextCanvas {
     pub fn new() -> Self {
         TextCanvas {
@@ -82,7 +88,7 @@ impl TextCanvas {
 }
 
 impl TextCanvas {
-    fn render<Ctx: Clone>(&mut self, layout: &layout::SizedLayout<Ctx>, bounds: &Rect, mut context: &mut Ctx) {
+    fn render<Ctx: Clone>(&mut self, layout: &layout::SizedLayout<Ctx>, bounds: &Rect, context: &mut Ctx) {
         use layout::SizedNode::*;
         let layout = layout.clone();
         use unicode_segmentation::UnicodeSegmentation;
@@ -160,7 +166,7 @@ impl TextCanvas {
             }
             TopPadding(n, node) => {
                 let mut bounds = bounds.clone();
-                bounds.height = bounds.height.checked_sub(n).unwrap_or(0);
+                bounds.height = bounds.height.saturating_sub(n);
                 let mut frame = node.sizing.fit_into(&bounds);
                 frame.x = bounds.x;
                 frame.y = bounds.y + n as i64;
@@ -169,7 +175,7 @@ impl TextCanvas {
             }
             BottomPadding(n, node) => {
                 let mut bounds = bounds.clone();
-                bounds.height = bounds.height.checked_sub(n).unwrap_or(0);
+                bounds.height = bounds.height.saturating_sub(n);
 
                 let mut frame = node.sizing.fit_into(&bounds);
                 frame.x = bounds.x;
@@ -178,20 +184,20 @@ impl TextCanvas {
                 self.render(&node, &frame, context);
             }
             RightPadding(n, node) => {
-                let mut frame = node.sizing.fit_into(&bounds);
+                let mut frame = node.sizing.fit_into(bounds);
                 frame.x = bounds.x;
                 frame.y = bounds.y;
 
-                let free_width = bounds.width.checked_sub(n).unwrap_or(0);
-                let adjustment = frame.width.checked_sub(free_width).unwrap_or(0);
+                let free_width = bounds.width.saturating_sub(n);
+                let adjustment = frame.width.saturating_sub(free_width);
 
-                frame.width = frame.width.checked_sub(adjustment).unwrap_or(0);
+                frame.width = frame.width.saturating_sub(adjustment);
 
                 self.render(&node, &frame, context);
             }
             LeftPadding(n, node) => {
                 let mut bounds = bounds.clone();
-                bounds.width = bounds.width.checked_sub(n).unwrap_or(0);
+                bounds.width = bounds.width.saturating_sub(n);
                 let mut frame = node.sizing.fit_into(&bounds);
                 frame.x = bounds.x + n as i64;
                 frame.y = bounds.y;
@@ -213,17 +219,17 @@ impl TextCanvas {
                 for edge in &edges {
                     match edge {
                         layout::alignment::Edge::Top => {
-                            inner_bounds.height = inner_bounds.height.checked_sub(n).unwrap_or(0);
+                            inner_bounds.height = inner_bounds.height.saturating_sub(n);
                             inner_bounds.y = inner_bounds.y.checked_add(n as i64).unwrap_or(0);
                         }
                         layout::alignment::Edge::Right => {
-                            inner_bounds.width = inner_bounds.width.checked_sub(n).unwrap_or(0);
+                            inner_bounds.width = inner_bounds.width.saturating_sub(n);
                         }
                         layout::alignment::Edge::Bottom => {
-                            inner_bounds.height = inner_bounds.height.checked_sub(n).unwrap_or(0);
+                            inner_bounds.height = inner_bounds.height.saturating_sub(n);
                         }
                         layout::alignment::Edge::Left => {
-                            inner_bounds.width = inner_bounds.width.checked_sub(n).unwrap_or(0);
+                            inner_bounds.width = inner_bounds.width.saturating_sub(n);
                             inner_bounds.x = inner_bounds.x.checked_add(n as i64).unwrap_or(0);
                         }
                     }
@@ -367,7 +373,7 @@ impl TextCanvas {
                     }
                 }
 
-                let mut greedy_space = bounds.width.checked_sub(static_width).unwrap_or(0);
+                let mut greedy_space = bounds.width.saturating_sub(static_width);
                 let greedy_size = if greedy_count != 0 { greedy_space / greedy_count } else { 0 };
 
                 let mut new_nodes = vec![];
@@ -443,7 +449,7 @@ impl TextCanvas {
                 }
             }
             DrawCanvas(action) => {
-                let result = action(&mut context, bounds);
+                let result = action(context, bounds);
 
                 self.paste_canvas(&result, bounds);
             }
@@ -464,7 +470,7 @@ impl TextCanvas {
         let mut stdout = std::io::stdout();
         for n in 0..chars.len() {
             let c = &chars[n];
-            let _ = crossterm::queue!(stdout, crossterm::style::Print(format!("{c}")));
+            let _ = crossterm::queue!(stdout, crossterm::style::Print(c.to_string()));
     
             if n < chars.len()-1 && (n + 1) % self.size.width == 0 {
                 let _ = crossterm::queue!(stdout, crossterm::cursor::MoveToNextLine(1) );
@@ -480,10 +486,10 @@ impl TextCanvas {
         let mut stdout = std::io::stdout();
         for n in 0..chars.len() {
             let c = &chars[n];
-            let _ = crossterm::queue!(stdout, crossterm::style::Print(format!("{c}")));
+            let _ = crossterm::queue!(stdout, crossterm::style::Print(c.to_string()));
     
             if n < chars.len()-1 && (n + 1) % self.size.width == 0 {
-                let _ = crossterm::queue!(stdout, crossterm::style::Print(format!("\n")));
+                let _ = crossterm::queue!(stdout, crossterm::style::Print("\n".to_string()));
             }
         }
     

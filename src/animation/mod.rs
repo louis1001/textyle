@@ -1,7 +1,5 @@
-use std::io::Write;
-
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyEvent;
 
 use crate::{canvas::TextCanvas, layout::{geometry::Size, Layout}};
 use defer_lite::defer;
@@ -41,7 +39,7 @@ impl<State: AnimationState> AnimatedTextCanvas<State> {
 
 impl<State: AnimationState> AnimatedTextCanvas<State> {
     pub fn new(layout: AnimatedLayoutProvider<State>) -> Self {
-        AnimatedTextCanvas { layout: layout, update: |_|{} }
+        AnimatedTextCanvas { layout, update: |_|{} }
     }
 
     pub fn run_with_state(&self, state: State) -> Result<()> {
@@ -52,14 +50,14 @@ impl<State: AnimationState> AnimatedTextCanvas<State> {
         let mut terminal_columns = terminal_columns as usize;
         let mut terminal_rows = terminal_rows as usize;
 
-        let bounds = &Size::new(terminal_columns as usize, terminal_rows as usize);
+        let bounds = &Size::new(terminal_columns, terminal_rows);
         // let bounds = &Rect::sized(20, 5);
         let mut canvas = TextCanvas::create_in_bounds(bounds);
 
         let mut context = AnimationContext {
             frame_count: 0,
             delta_milis: 0.0,
-            state: state,
+            state,
             pending_events: vec![]
         };
 

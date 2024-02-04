@@ -122,7 +122,7 @@ impl<Item: Clone> Matrix<Item> {
         assert!(data.len() % row_count == 0, "Matrix must completely fill the grid");
 
         let col_count = data.len() / row_count;
-        Matrix { shape: (col_count, row_count), data: data.into_iter().map(|x| (*x).clone()).collect() }
+        Matrix { shape: (col_count, row_count), data: data.iter().map(|x| (*x).clone()).collect() }
     }
 
     pub fn data(&self) -> &[Item] {
