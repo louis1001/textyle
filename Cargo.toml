@@ -11,7 +11,11 @@ repository = "https://github.com/louis1001/textyle"
 
 license = "MIT"
 
-keywords = ["command-line-interface", "gui", "graphics", "rendering::engine", "visualization"]
+categories = ["command-line-interface", "gui", "graphics", "rendering::engine", "visualization"]
+
+exclude = [
+    "**/main.rs",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
