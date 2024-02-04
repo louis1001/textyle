@@ -6,6 +6,8 @@ pub mod geometry;
 
 use geometry::Rect;
 
+use crate::animation::AnimationContext;
+
 #[derive(Clone)]
 pub enum Layout<Ctx> {
     Text(String),
@@ -24,10 +26,10 @@ pub enum Layout<Ctx> {
     Background(char, Box<Layout<Ctx>>),
     Border(usize, char, HashSet<alignment::Edge>, Box<Layout<Ctx>>),
 
-    VerticalStack(alignment::HorizontalAlignment, Vec<Layout<Ctx>>),
-    HorizontalStack(alignment::VerticalAlignment, Vec<Layout<Ctx>>),
+    VerticalStack(alignment::HorizontalAlignment, usize, Vec<Layout<Ctx>>),
+    HorizontalStack(alignment::VerticalAlignment, usize, Vec<Layout<Ctx>>),
 
-    DrawCanvas(fn(&Ctx, &Rect)->crate::canvas::TextCanvas),
+    DrawCanvas(fn(&mut Ctx, &Rect)->crate::canvas::TextCanvas),
     WithContext(fn(&Ctx)->Layout<Ctx>)
 }
 
@@ -49,10 +51,10 @@ pub enum SizedNode<Ctx: Clone> {
     Background(char, SizedLayout<Ctx>),
     Border(usize, char, HashSet<alignment::Edge>, SizedLayout<Ctx>),
 
-    VerticalStack(alignment::HorizontalAlignment, Vec<SizedLayout<Ctx>>),
-    HorizontalStack(alignment::VerticalAlignment, Vec<SizedLayout<Ctx>>),
+    VerticalStack(alignment::HorizontalAlignment, usize, Vec<SizedLayout<Ctx>>),
+    HorizontalStack(alignment::VerticalAlignment, usize, Vec<SizedLayout<Ctx>>),
 
-    DrawCanvas(fn(&Ctx, &Rect)->crate::canvas::TextCanvas)
+    DrawCanvas(fn(&mut Ctx, &Rect)->crate::canvas::TextCanvas)
 }
 
 #[derive(Clone)]
@@ -80,7 +82,7 @@ impl<Ctx: Clone> Layout<Ctx> {
         }
     }
 
-    pub fn resolve_size(&self, bounds: &Rect, context: &Ctx) -> SizedLayout<Ctx> {
+    pub fn resolve_size(&self, bounds: &Rect, context: &mut Ctx) -> SizedLayout<Ctx> {
         use Layout::*;
         use sizing::Sizing::*;
 
@@ -291,12 +293,15 @@ impl<Ctx: Clone> Layout<Ctx> {
                 SizedLayout::new(SizedNode::Border(*n, *c, edges.clone(), resolved_content), frame)
             }
 
-            VerticalStack(alignment, nodes) => {
-                let mut result = sizing::ItemSizing { horizontal: Static(0), vertical: Static(0) };
+            VerticalStack(alignment, spacing,  nodes) => {
+                let spacing_sizing = spacing * nodes.len().saturating_sub(1);
+                let mut result = sizing::ItemSizing { horizontal: Static(0), vertical: Static(spacing_sizing) };
+                let mut bounds = bounds.clone();
+                bounds.height -= spacing_sizing;
                 let mut resolved_children: Vec<SizedLayout<_>> = vec![];
 
                 for node in nodes {
-                    let resolved_node = node.resolve_size(bounds, context);
+                    let resolved_node = node.resolve_size(&bounds, context);
                     let node_sizing = resolved_node.sizing.clone();
                     result.horizontal = match result.horizontal {
                         Static(j) => match node_sizing.horizontal {
@@ -313,14 +318,17 @@ impl<Ctx: Clone> Layout<Ctx> {
                     resolved_children.push(resolved_node);
                 }
 
-                SizedLayout::new(SizedNode::VerticalStack(alignment.clone(), resolved_children), result)
+                SizedLayout::new(SizedNode::VerticalStack(alignment.clone(), *spacing, resolved_children), result)
             }
-            HorizontalStack(alignment, nodes) => {
-                let mut result = sizing::ItemSizing { horizontal: Static(0), vertical: Static(0) };
+            HorizontalStack(alignment, spacing, nodes) => {
+                let spacing_sizing = spacing * nodes.len().saturating_sub(1);
+                let mut result = sizing::ItemSizing { horizontal: Static(spacing_sizing), vertical: Static(0) };let mut bounds = bounds.clone();
+                bounds.width -= spacing_sizing;
+
                 let mut resolved_children = vec![];
 
                 for node in nodes {
-                    let resolved_node = node.resolve_size(bounds, context);
+                    let resolved_node = node.resolve_size(&bounds, context);
                     let node_sizing = resolved_node.sizing.clone();
                     result.vertical = match result.vertical {
                         Static(j) => match node_sizing.vertical {
@@ -338,7 +346,7 @@ impl<Ctx: Clone> Layout<Ctx> {
                     resolved_children.push(resolved_node);
                 }
 
-                SizedLayout::new(SizedNode::HorizontalStack(alignment.clone(), resolved_children), result)
+                SizedLayout::new(SizedNode::HorizontalStack(alignment.clone(), *spacing, resolved_children), result)
             }
             DrawCanvas(action) => {
                 SizedLayout::new(
@@ -440,10 +448,31 @@ impl<Ctx: Clone> Layout<Ctx> {
     }
 
     pub fn vertical_stack(nodes: Vec<Layout<Ctx>>) -> Layout<Ctx> {
-        Layout::VerticalStack(alignment::HorizontalAlignment::Center, nodes)
+        Layout::VerticalStack(alignment::HorizontalAlignment::Center, 0, nodes)
     }
     
     pub fn horizontal_stack(nodes: Vec<Layout<Ctx>>) -> Layout<Ctx> {
-        Layout::HorizontalStack(alignment::VerticalAlignment::Center, nodes)
+        Layout::HorizontalStack(alignment::VerticalAlignment::Center, 0, nodes)
+    }
+
+    pub fn grid<State, Item: Clone>(items: &geometry::Matrix<Item>, spacing: usize, view: fn(&Item)->Layout<Ctx>) -> Layout<Ctx> {
+        let mut rows = vec![];
+
+        let mut row = vec![];
+        let mut col_counter = 0;
+        for item in items.data() {
+            col_counter += 1;
+
+            let cell = view(item).center();
+            row.push(cell);
+
+            if col_counter == items.shape().0 {
+                rows.push(Layout::HorizontalStack(alignment::VerticalAlignment::Center, spacing, row));
+                row = vec![];
+                col_counter = 0;
+            }
+        }
+
+        Layout::VerticalStack(alignment::HorizontalAlignment::Center, spacing, rows)
     }
 }

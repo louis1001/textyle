@@ -82,7 +82,7 @@ impl TextCanvas {
 }
 
 impl TextCanvas {
-    fn render<Ctx: Clone>(&mut self, layout: &layout::SizedLayout<Ctx>, bounds: &Rect, context: &Ctx) {
+    fn render<Ctx: Clone>(&mut self, layout: &layout::SizedLayout<Ctx>, bounds: &Rect, mut context: &mut Ctx) {
         use layout::SizedNode::*;
         let layout = layout.clone();
         use unicode_segmentation::UnicodeSegmentation;
@@ -256,13 +256,15 @@ impl TextCanvas {
                     }
                 }
             }
-            VerticalStack(alignment, nodes) => {
+            VerticalStack(alignment, spacing, nodes) => {
                 let mut max_width = 0usize;
+                
+                let spacing_sizing = spacing * (nodes.len().saturating_sub(1));
 
                 let mut last_bounds = Rect::zero();
 
                 let mut greedy_count = 0;
-                let mut static_height = 0usize;
+                let mut static_height = spacing_sizing;
 
                 for node in &nodes {
                     if let layout::sizing::Sizing::Static(n) = node.sizing.vertical {
@@ -302,7 +304,13 @@ impl TextCanvas {
                 for node in &nodes {
                     let size = node.sizing.fit_into(bounds);
 
-                    let node_bounds = Rect::new(0, last_bounds.max_y(), size.width, size.height);
+                    let spacing_offset = if raw_bounds.is_empty() {
+                        0
+                    } else {
+                        spacing as i64
+                    };
+
+                    let node_bounds = Rect::new(0, last_bounds.max_y() + spacing_offset, size.width, size.height);
                     last_bounds = node_bounds.clone();
 
                     if node_bounds.width > max_width {
@@ -341,13 +349,15 @@ impl TextCanvas {
                     self.render(&node, size, context);
                 }
             }
-            HorizontalStack(alignment, nodes) => {
+            HorizontalStack(alignment, spacing, nodes) => {
                 let mut max_height = 0usize;
+
+                let spacing_sizing = spacing * (nodes.len().saturating_sub(1));
 
                 let mut last_bounds = Rect::zero();
 
                 let mut greedy_count = 0;
-                let mut static_width = 0usize;
+                let mut static_width = spacing_sizing;
 
                 for node in &nodes {
                     if let layout::sizing::Sizing::Static(n) = node.sizing.horizontal {
@@ -387,7 +397,13 @@ impl TextCanvas {
                 for node in &nodes {
                     let size = node.sizing.fit_into(bounds);
 
-                    let node_bounds = Rect::new(last_bounds.max_x(), 0, size.width, size.height);
+                    let spacing_offset = if raw_bounds.is_empty() {
+                        0
+                    } else {
+                        spacing as i64
+                    };
+
+                    let node_bounds = Rect::new(last_bounds.max_x() + spacing_offset, 0, size.width, size.height);
                     last_bounds = node_bounds.clone();
 
                     if node_bounds.height > max_height {
@@ -427,14 +443,14 @@ impl TextCanvas {
                 }
             }
             DrawCanvas(action) => {
-                let result = action(context, bounds);
+                let result = action(&mut context, bounds);
 
                 self.paste_canvas(&result, bounds);
             }
         }
     }
     
-    pub fn render_layout<Ctx: Clone>(&mut self, layout: &layout::Layout<Ctx>, context: &Ctx) {
+    pub fn render_layout<Ctx: Clone>(&mut self, layout: &layout::Layout<Ctx>, context: &mut Ctx) {
         let self_bounds = Rect::sized(self.size.width, self.size.height);
         let layout = layout.resolve_size(&self_bounds, context);
         let bounds = layout.sizing.fit_into(&self_bounds);

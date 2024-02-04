@@ -77,6 +77,9 @@ impl Vector {
     pub fn sub(vec1: &Vector, vec2: &Vector) -> Vector {
         Vector { x: vec1.x - vec2.x, y: vec1.y - vec2.y }
     }
+
+    pub fn x(&self) -> i64 { self.x }
+    pub fn y(&self) -> i64 { self.y }
 }
 
 impl Vector {
@@ -105,5 +108,44 @@ impl Size {
 
     pub fn to_vector(&self) -> Vector {
         Vector::new(self.width as i64, self.height as i64)
+    }
+}
+
+#[derive(Clone, PartialEq, PartialOrd)]
+pub struct Matrix<Item: Clone> {
+    shape: (usize, usize),
+    data: Vec<Item>
+}
+
+impl<Item: Clone> Matrix<Item> {
+    pub fn with_rows(data: &[Item], row_count: usize) -> Self {
+        assert!(data.len() % row_count == 0, "Matrix must completely fill the grid");
+
+        let col_count = data.len() / row_count;
+        Matrix { shape: (col_count, row_count), data: data.into_iter().map(|x| (*x).clone()).collect() }
+    }
+
+    pub fn data(&self) -> &[Item] {
+        &self.data
+    }
+
+    pub fn shape(&self) -> (usize, usize) {
+        self.shape
+    }
+
+    pub fn get(&self, x: usize, y: usize) -> &Item {
+        assert!(x < self.shape.0 && y < self.shape.1);
+
+        let index = y * self.shape.1 + x;
+
+        &self.data[index]
+    }
+
+    pub fn get_mut(&mut self, x: usize, y: usize) -> &mut Item {
+        assert!(x < self.shape.0 && y < self.shape.1);
+
+        let index = y * self.shape.1 + x;
+
+        &mut self.data[index]
     }
 }
