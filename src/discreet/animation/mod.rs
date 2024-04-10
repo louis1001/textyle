@@ -1,7 +1,7 @@
 use anyhow::Result;
 use crossterm::event::KeyEvent;
 
-use crate::{canvas::TextCanvas, layout::{geometry::Size, Layout}};
+use crate::{discreet::canvas::TextCanvas, discreet::layout::{geometry::Size, Layout}};
 use defer_lite::defer;
 
 pub trait AnimationState: Clone {}
@@ -61,9 +61,7 @@ impl<State: AnimationState> AnimatedTextCanvas<State> {
             pending_events: vec![]
         };
 
-        let layout = (self.layout)(&mut context);
-
-        canvas.render_layout(&layout, &mut context);
+        canvas.render_layout(&Layout::WithContext(self.layout), &mut context);
 
         crossterm::terminal::enable_raw_mode().unwrap_or_else(|_| {
             crossterm::terminal::disable_raw_mode().unwrap();
@@ -111,8 +109,7 @@ impl<State: AnimationState> AnimatedTextCanvas<State> {
 
             canvas.clear_with(" ");
 
-            let layout = (self.layout)(&mut context);
-            canvas.render_layout(&layout, &mut context);
+            canvas.render_layout(&Layout::WithContext(self.layout), &mut context);
             
             self.clear_buffer();
             context.frame_count += 1;

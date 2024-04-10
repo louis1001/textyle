@@ -1,6 +1,6 @@
 [package]
 name = "textyle"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A text-based declarative UI library inspired by SwiftUI"
 authors = ["louis1001 <contact@louis1001.dev>"]
@@ -25,3 +25,4 @@ unicode-segmentation = "1.10.1"
 anyhow = "1.0.79"
 defer-lite = "1.0.0"
 rand = "0.8.5"
+nannou = "0.19.0"

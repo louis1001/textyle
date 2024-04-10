@@ -6,31 +6,93 @@ pub mod geometry;
 
 use geometry::Rect;
 
+/// A node (and the tree itself) that recursively represents the desired UI
+/// 
+/// This enum describes the basic bulding blocks for a Textyle layout tree. It also stores a generic parameter
+/// which you can define as the context of the layout.
+/// 
+/// You can use the provided methods to modify and build the layout:
+/// 
+/// ```rust
+/// let mut layout: Layout<()> = Layout::Text("Hello!".to_string()) // The inner most node
+///     .padding_horizontal(3) // modifies the node wrapping it around a series of Padding nodes, and returns a Layout
+///     .background('*');
+/// ```
 #[derive(Clone)]
 pub enum Layout<Ctx> {
+    /// A basic string
     Text(String),
+
+    /// Constraints the inner node to a specific horizontal space. Takes priority over greedy spacing.
     Width(usize, Box<Layout<Ctx>>),
+
+    /// Constraints the inner node to a specific vertical space. Takes priority over greedy spacing.
     Height(usize, Box<Layout<Ctx>>),
+
+    /// Adds empty spacing to the top of the inner node. If free space is not available in the container,
+    /// the inner node will have to shrink to fit the padding.
     TopPadding(usize, Box<Layout<Ctx>>),
+    
+    /// Adds empty spacing to the right of the inner node. If free space is not available in the container,
+    /// the inner node will have to shrink to fit the padding.
     RightPadding(usize, Box<Layout<Ctx>>),
+
+    /// Adds empty spacing to the bottom of the inner node. If free space is not available in the container,
+    /// the inner node will have to shrink to fit the padding.
     BottomPadding(usize, Box<Layout<Ctx>>),
+
+    /// Adds empty spacing to the left of the inner node. If free space is not available in the container,
+    /// the inner node will have to shrink to fit the padding.
     LeftPadding(usize, Box<Layout<Ctx>>),
+
+    /// A container that expands vertically to the full available space,
+    /// keeping the inner node centered without modifying it's regular size.
     VCenter(Box<Layout<Ctx>>),
+
+    /// A container that expands horizontally to the full available space,
+    /// keeping the inner node centered without modifying it's regular size.
     HCenter(Box<Layout<Ctx>>),
+
+    /// A container that expands vertically to the full available space,
+    /// keeping the inner node aligned to the bottom without it's regular size.
     VBottomAlign(Box<Layout<Ctx>>),
+
+    /// A container that expands horizontally to the full available space,
+    /// keeping the inner node aligned to the right without it's regular size.
     HRightAlign(Box<Layout<Ctx>>),
+
+    /// A container that expands vertically to the full available space,
+    /// keeping the inner node aligned to the top without it's regular size.
     VTopAlign(Box<Layout<Ctx>>),
+
+    /// A container that expands horizontally to the full available space,
+    /// keeping the inner node aligned to the left without it's regular size.
     HLeftAlign(Box<Layout<Ctx>>),
+
+    /// Doesn't affect the layout of the inner node, but fills the empty spaces with the provided `char`
     Background(char, Box<Layout<Ctx>>),
+
+    /// Draws a border around the inner node, with a line width and a specific char. You can specify which edge to draw it on.
+    /// Its spacing rules work exactly like `Layout::Padding`.
     Border(usize, char, HashSet<alignment::Edge>, Box<Layout<Ctx>>),
 
+    /// A container that composes nodes vertically, top to bottom. You can define the horizontal alignment and the spacing between elements.
+    /// It occupies only the amount of space its nodes use.
     VerticalStack(alignment::HorizontalAlignment, usize, Vec<Layout<Ctx>>),
+
+    /// A container that composes nodes horizontally, top to bottom. You can define the vertical alignment and the spacing between elements.
+    /// It occupies only the amount of space its nodes use.
     HorizontalStack(alignment::VerticalAlignment, usize, Vec<Layout<Ctx>>),
 
-    DrawCanvas(fn(&mut Ctx, &Rect)->crate::canvas::TextCanvas),
+    /// Provides a way to embed any text canvas into the current layout. It grows greedily.
+    DrawCanvas(fn(&Ctx, &Rect)->crate::discreet::canvas::TextCanvas),
+
+    /// Allows the rendered layout access to the current context. Useful when the application is keeping external state. It doesn't affect layout.
     WithContext(fn(&Ctx)->Layout<Ctx>)
 }
 
+/// A variant of the layout tree that contains a rough description of the UI's sizing information.
+/// It calculates the minimum space that a node can take up, and if it will expand in any way to fill it's content.
 #[derive(Clone)]
 pub enum SizedNode<Ctx: Clone> {
     Text(String),
@@ -52,7 +114,7 @@ pub enum SizedNode<Ctx: Clone> {
     VerticalStack(alignment::HorizontalAlignment, usize, Vec<SizedLayout<Ctx>>),
     HorizontalStack(alignment::VerticalAlignment, usize, Vec<SizedLayout<Ctx>>),
 
-    DrawCanvas(fn(&mut Ctx, &Rect)->crate::canvas::TextCanvas)
+    DrawCanvas(fn(&Ctx, &Rect)->crate::discreet::canvas::TextCanvas)
 }
 
 #[derive(Clone)]
