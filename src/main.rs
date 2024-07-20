@@ -8,7 +8,9 @@ fn main() -> Result<()> {
         .padding(2)
         .background('`')
         .padding(2)
-        .border(1, '.', Edge::all());
+        .border(1, '.', Edge::all())
+        .padding(1)
+        .border(1, '&', Edge::all());
 
     let mut canvas = TextCanvas::create(30, 20);
 

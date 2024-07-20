@@ -5,41 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug cargo run",
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'textyle'",
-            "cargo": {
-                "args": [
-                    "build",
-                    "--bin=textyle",
-                    "--package=textyle"
-                ],
-                "filter": {
-                    "name": "textyle",
-                    "kind": "bin"
-                }
-            },
+            "program": "${workspaceFolder}/target/debug/textyle",
             "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'textyle'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=textyle",
-                    "--package=textyle"
-                ],
-                "filter": {
-                    "name": "textyle",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "stopOnEntry": false,
+            "sourceLanguages": ["rust"],
         }
     ]
 }

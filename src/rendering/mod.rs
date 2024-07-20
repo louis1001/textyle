@@ -1,23 +1,17 @@
-use crate::layout::{self, geometry::{Rect, Vector}, SizedLayout};
+use crate::layout::{self, geometry::Rect, SizedLayout};
 
 pub enum DrawCommand {
     Text(Rect, String),
     Rect(Rect, String),
-    Line(Vector, Vector, String),
 }
 
 impl<Ctx: Clone> SizedLayout<Ctx> {
-    fn resolve_draw_commands(&self, bounds: &Rect, context: &mut Ctx) -> Vec<DrawCommand> {
+    pub fn resolve_draw_commands(&self, bounds: &Rect, context: &mut Ctx) -> Vec<DrawCommand> {
         use layout::SizedNode::*;
         let layout = self.clone();
-        use unicode_segmentation::UnicodeSegmentation;
 
         match *layout.node {
             Text(content) => {
-                let graphemes = content.graphemes(true).collect::<Vec<_>>();
-                let mut x = bounds.x as usize;
-                let mut y = bounds.y as usize;
-                
                 vec![DrawCommand::Text(bounds.clone(), content)]
             }
             Width(_, node) | Height(_, node) => {
@@ -33,7 +27,7 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
 
                 let content_bounds = n.sizing.fit_into(&content_rect);
 
-                self.resolve_draw_commands(&content_bounds, context)
+                n.resolve_draw_commands(&content_bounds, context)
             }
             HCenter(n) => {
                 let mut content_rect = n.sizing.fit_into(bounds);
@@ -43,7 +37,7 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
 
                 let content_bounds = n.sizing.fit_into(&content_rect);
 
-                self.resolve_draw_commands(&content_bounds, context)
+                n.resolve_draw_commands(&content_bounds, context)
             }
             VBottomAlign(n) => {
                 let mut content_rect = n.sizing.fit_into(bounds);
@@ -51,7 +45,7 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
                 let top_start = bottom_most - content_rect.height;
                 content_rect.y = top_start as i64;
 
-                self.resolve_draw_commands(&content_rect, context)
+                n.resolve_draw_commands(&content_rect, context)
             }
             HRightAlign(n) => {
                 let mut content_rect = n.sizing.fit_into(bounds);
@@ -61,12 +55,12 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
 
                 let content_bounds = n.sizing.fit_into(&content_rect);
 
-                self.resolve_draw_commands(&content_bounds, context)
+                n.resolve_draw_commands(&content_bounds, context)
             }
             VTopAlign(n) | HLeftAlign(n) => {
                 let content_rect = n.sizing.fit_into(bounds);
 
-                self.resolve_draw_commands(&content_rect, context)
+                n.resolve_draw_commands(&content_rect, context)
             }
             TopPadding(n, node) => {
                 let mut bounds = bounds.clone();
@@ -75,7 +69,7 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
                 frame.x = bounds.x;
                 frame.y = bounds.y + n as i64;
 
-                self.resolve_draw_commands(&frame, context)
+                node.resolve_draw_commands(&frame, context)
             }
             BottomPadding(n, node) => {
                 let mut bounds = bounds.clone();
@@ -85,7 +79,7 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
                 frame.x = bounds.x;
                 frame.y = bounds.y;
 
-                self.resolve_draw_commands(&frame, context)
+                node.resolve_draw_commands(&frame, context)
             }
             RightPadding(n, node) => {
                 let mut frame = node.sizing.fit_into(bounds);
@@ -97,7 +91,7 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
 
                 frame.width = frame.width.saturating_sub(adjustment);
 
-                self.resolve_draw_commands(&frame, context)
+                node.resolve_draw_commands(&frame, context)
             }
             LeftPadding(n, node) => {
                 let mut bounds = bounds.clone();
@@ -106,7 +100,7 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
                 frame.x = bounds.x + n as i64;
                 frame.y = bounds.y;
 
-                self.resolve_draw_commands(&frame, context)
+                node.resolve_draw_commands(&frame, context)
             }
             Background(c, node) => {
                 let mut frame = node.sizing.fit_into(bounds);
@@ -116,9 +110,9 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
                 // self.draw_rect(bounds, &c.to_string());
                 let mut commands = vec![DrawCommand::Rect(bounds.clone(), c.to_string())];
 
-                let text_command = self.resolve_draw_commands(&frame, context);
+                let content_commands = node.resolve_draw_commands(&frame, context);
 
-                commands.extend(text_command);
+                commands.extend(content_commands);
 
                 commands
             }
@@ -148,29 +142,29 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
                 frame.x = inner_bounds.x;
                 frame.y = inner_bounds.y;
 
-                let mut commands = self.resolve_draw_commands(&frame, context);
+                let mut commands = node.resolve_draw_commands(&frame, context);
 
                 for edge in &edges {
                     let command = match edge {
                         layout::alignment::Edge::Top => {
                             let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, outer_bounds.width, n);
-                            let line = DrawCommand::Rect(line_bounds, c.to_string());
-                            line
+                            
+                            DrawCommand::Rect(line_bounds, c.to_string())
                         }
                         layout::alignment::Edge::Right => {
                             let line_bounds = Rect::new(outer_bounds.max_x() - n as i64, outer_bounds.y, n, outer_bounds.height);
-                            let line = DrawCommand::Rect(line_bounds, c.to_string());
-                            line
+                            
+                            DrawCommand::Rect(line_bounds, c.to_string())
                         }
                         layout::alignment::Edge::Bottom => {
                             let line_bounds = Rect::new(outer_bounds.x, outer_bounds.max_y() - n as i64, outer_bounds.width, n);
-                            let line = DrawCommand::Rect(line_bounds, c.to_string());
-                            line
+                            
+                            DrawCommand::Rect(line_bounds, c.to_string())
                         }
                         layout::alignment::Edge::Left => {
                             let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, n, outer_bounds.height);
-                            let line = DrawCommand::Rect(line_bounds, c.to_string());
-                            line
+                            
+                            DrawCommand::Rect(line_bounds, c.to_string())
                         }
                     };
 
@@ -265,13 +259,13 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
                     bound
                 }).collect();
 
-                let mut commands = nodes.into_iter().enumerate().flat_map(|(i, node)| {
+                
+
+                nodes.into_iter().enumerate().flat_map(|(i, node)| {
                     let size = &final_bounds[i];
 
                     node.resolve_draw_commands(size, context)
-                }).collect::<Vec<_>>();
-
-                commands
+                }).collect::<Vec<_>>()
             }
             HorizontalStack(alignment, spacing, nodes) => {
                 let mut max_height = 0usize;
@@ -359,13 +353,13 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
                     bound
                 }).collect();
 
-                let commands = nodes.into_iter().enumerate().flat_map(|(i, node)| {
+                
+
+                nodes.into_iter().enumerate().flat_map(|(i, node)| {
                     let size = &final_bounds[i];
 
                     node.resolve_draw_commands(size, context)
-                }).collect::<Vec<_>>();
-
-                commands
+                }).collect::<Vec<_>>()
             }
             DrawCanvas(action) => {
                 let result = action(context, bounds);
