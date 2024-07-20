@@ -1,97 +1,15 @@
-use crate::layout;
+use crate::layout::{self, geometry::{Rect, Vector}, SizedLayout};
 
-use layout::geometry::{Rect, Size};
-use crate::rendering;
-
-pub struct TextCanvas {
-    size: Size,
-    contents: Vec<String>,
+pub enum DrawCommand {
+    Text(Rect, String),
+    Rect(Rect, String),
+    Line(Vector, Vector, String),
 }
 
-impl Default for TextCanvas {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TextCanvas {
-    pub fn new() -> Self {
-        TextCanvas {
-            size: Size::zero(),
-            contents: Vec::new(),
-        }
-    }
-
-    pub fn create_in_bounds(size: &Size) -> Self {
-        TextCanvas {
-            size: size.clone(),
-            contents: vec![" ".to_string(); size.width * size.height],
-        }
-    }
-
-    pub fn create(width: usize, height: usize) -> Self {
-        TextCanvas {
-            size: Size::new(width, height),
-            contents: vec![" ".to_string(); width * height],
-        }
-    }
-}
-
-impl TextCanvas {
-    fn get_at(&self, x: usize, y: usize) -> Option<&str> {
-        if x >= self.size.width || y >= self.size.height {
-            return None;
-        }
-
-        let index = y * self.size.width + x;
-
-        Some(self.contents[index].as_str())
-    }
-
-    pub fn write(&mut self, grapheme: &str, x: usize, y: usize) {
-        if x >= self.size.width || y >= self.size.height { return; }
-
-        let index = y * self.size.width + x;
-
-        self.contents[index] = grapheme.to_string();
-    }
-
-    fn draw_rect(&mut self, bounds: &Rect, grapheme: &str) {
-        for x in bounds.x..(bounds.x + bounds.width as i64) {
-            for y in bounds.y..(bounds.y + bounds.height as i64) {
-                if x < 0 || x >= self.size.width as i64 { continue; }
-                if y < 0 || y >= self.size.height as i64 { continue; }
-
-                self.write(grapheme, x as usize, y as usize);
-            }
-        }
-    }
-    
-    fn paste_canvas(&mut self, other: &TextCanvas, bounds: &Rect) {
-        assert_eq!(other.size.width, bounds.width);
-        assert_eq!(other.size.height, bounds.height);
-        
-        for x in 0..bounds.width {
-            for y in 0..bounds.height {
-                let c = match other.get_at(x, y) {
-                    Some(c) => c,
-                    None => continue
-                };
-
-                self.write(c, x + bounds.x as usize, y + bounds.y as usize);
-            }
-        }
-    }
-
-    pub fn clear_with(&mut self, grapheme: &str) {
-        self.draw_rect(&Rect::from_size(&self.size), grapheme);
-    }
-}
-
-impl TextCanvas {
-    fn render<Ctx: Clone>(&mut self, layout: &layout::SizedLayout<Ctx>, bounds: &Rect, context: &mut Ctx) {
+impl<Ctx: Clone> SizedLayout<Ctx> {
+    fn resolve_draw_commands(&self, bounds: &Rect, context: &mut Ctx) -> Vec<DrawCommand> {
         use layout::SizedNode::*;
-        let layout = layout.clone();
+        let layout = self.clone();
         use unicode_segmentation::UnicodeSegmentation;
 
         match *layout.node {
@@ -99,28 +17,13 @@ impl TextCanvas {
                 let graphemes = content.graphemes(true).collect::<Vec<_>>();
                 let mut x = bounds.x as usize;
                 let mut y = bounds.y as usize;
-                for g in graphemes {
-                    if g == "\n" {
-                        y += 1;
-                        x = bounds.x as usize;
-                        continue;
-                    } else if g == " " {
-                        // Don't write anything
-                    } else {
-                        self.write(g, x, y);
-                    }
-
-                    x += 1;
-                    if (x - bounds.x as usize) >= bounds.width {
-                        y += 1;
-                        x = bounds.x as usize;
-                    }
-                }
+                
+                vec![DrawCommand::Text(bounds.clone(), content)]
             }
             Width(_, node) | Height(_, node) => {
                 let frame = node.sizing.fit_into(bounds);
 
-                self.render(&node, &frame, context);
+                node.resolve_draw_commands(&frame, context)
             }
             VCenter(n) => {
                 let mut content_rect = n.sizing.fit_into(bounds);
@@ -130,7 +33,7 @@ impl TextCanvas {
 
                 let content_bounds = n.sizing.fit_into(&content_rect);
 
-                self.render(&n, &content_bounds, context);
+                self.resolve_draw_commands(&content_bounds, context)
             }
             HCenter(n) => {
                 let mut content_rect = n.sizing.fit_into(bounds);
@@ -140,7 +43,7 @@ impl TextCanvas {
 
                 let content_bounds = n.sizing.fit_into(&content_rect);
 
-                self.render(&n, &content_bounds, context);
+                self.resolve_draw_commands(&content_bounds, context)
             }
             VBottomAlign(n) => {
                 let mut content_rect = n.sizing.fit_into(bounds);
@@ -148,7 +51,7 @@ impl TextCanvas {
                 let top_start = bottom_most - content_rect.height;
                 content_rect.y = top_start as i64;
 
-                self.render(&n, &content_rect, context);
+                self.resolve_draw_commands(&content_rect, context)
             }
             HRightAlign(n) => {
                 let mut content_rect = n.sizing.fit_into(bounds);
@@ -158,12 +61,12 @@ impl TextCanvas {
 
                 let content_bounds = n.sizing.fit_into(&content_rect);
 
-                self.render(&n, &content_bounds, context);
+                self.resolve_draw_commands(&content_bounds, context)
             }
             VTopAlign(n) | HLeftAlign(n) => {
                 let content_rect = n.sizing.fit_into(bounds);
 
-                self.render(&n, &content_rect, context);
+                self.resolve_draw_commands(&content_rect, context)
             }
             TopPadding(n, node) => {
                 let mut bounds = bounds.clone();
@@ -172,7 +75,7 @@ impl TextCanvas {
                 frame.x = bounds.x;
                 frame.y = bounds.y + n as i64;
 
-                self.render(&node, &frame, context);
+                self.resolve_draw_commands(&frame, context)
             }
             BottomPadding(n, node) => {
                 let mut bounds = bounds.clone();
@@ -182,7 +85,7 @@ impl TextCanvas {
                 frame.x = bounds.x;
                 frame.y = bounds.y;
 
-                self.render(&node, &frame, context);
+                self.resolve_draw_commands(&frame, context)
             }
             RightPadding(n, node) => {
                 let mut frame = node.sizing.fit_into(bounds);
@@ -194,7 +97,7 @@ impl TextCanvas {
 
                 frame.width = frame.width.saturating_sub(adjustment);
 
-                self.render(&node, &frame, context);
+                self.resolve_draw_commands(&frame, context)
             }
             LeftPadding(n, node) => {
                 let mut bounds = bounds.clone();
@@ -203,16 +106,21 @@ impl TextCanvas {
                 frame.x = bounds.x + n as i64;
                 frame.y = bounds.y;
 
-                self.render(&node, &frame, context);
+                self.resolve_draw_commands(&frame, context)
             }
             Background(c, node) => {
                 let mut frame = node.sizing.fit_into(bounds);
                 frame.x = bounds.x;
                 frame.y = bounds.y;
 
-                self.draw_rect(bounds, &c.to_string());
+                // self.draw_rect(bounds, &c.to_string());
+                let mut commands = vec![DrawCommand::Rect(bounds.clone(), c.to_string())];
 
-                self.render(&node, &frame, context);
+                let text_command = self.resolve_draw_commands(&frame, context);
+
+                commands.extend(text_command);
+
+                commands
             }
             Border(n, c, edges, node) => {
                 let outer_bounds = bounds;
@@ -240,28 +148,36 @@ impl TextCanvas {
                 frame.x = inner_bounds.x;
                 frame.y = inner_bounds.y;
 
-                self.render(&node, &frame, context);
+                let mut commands = self.resolve_draw_commands(&frame, context);
 
                 for edge in &edges {
-                    match edge {
+                    let command = match edge {
                         layout::alignment::Edge::Top => {
                             let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, outer_bounds.width, n);
-                            self.draw_rect(&line_bounds, &c.to_string())
+                            let line = DrawCommand::Rect(line_bounds, c.to_string());
+                            line
                         }
                         layout::alignment::Edge::Right => {
                             let line_bounds = Rect::new(outer_bounds.max_x() - n as i64, outer_bounds.y, n, outer_bounds.height);
-                            self.draw_rect(&line_bounds, &c.to_string())
+                            let line = DrawCommand::Rect(line_bounds, c.to_string());
+                            line
                         }
                         layout::alignment::Edge::Bottom => {
                             let line_bounds = Rect::new(outer_bounds.x, outer_bounds.max_y() - n as i64, outer_bounds.width, n);
-                            self.draw_rect(&line_bounds, &c.to_string())
+                            let line = DrawCommand::Rect(line_bounds, c.to_string());
+                            line
                         }
                         layout::alignment::Edge::Left => {
                             let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, n, outer_bounds.height);
-                            self.draw_rect(&line_bounds, &c.to_string())
+                            let line = DrawCommand::Rect(line_bounds, c.to_string());
+                            line
                         }
-                    }
+                    };
+
+                    commands.push(command);
                 }
+
+                commands
             }
             VerticalStack(alignment, spacing, nodes) => {
                 let mut max_width = 0usize;
@@ -349,12 +265,13 @@ impl TextCanvas {
                     bound
                 }).collect();
 
-                for i in 0..nodes.len() {
-                    let node = nodes[i].clone();
+                let mut commands = nodes.into_iter().enumerate().flat_map(|(i, node)| {
                     let size = &final_bounds[i];
 
-                    self.render(&node, size, context);
-                }
+                    node.resolve_draw_commands(size, context)
+                }).collect::<Vec<_>>();
+
+                commands
             }
             HorizontalStack(alignment, spacing, nodes) => {
                 let mut max_height = 0usize;
@@ -442,75 +359,19 @@ impl TextCanvas {
                     bound
                 }).collect();
 
-                for i in 0..nodes.len() {
-                    let node = nodes[i].clone();
+                let commands = nodes.into_iter().enumerate().flat_map(|(i, node)| {
                     let size = &final_bounds[i];
 
-                    self.render(&node, size, context);
-                }
+                    node.resolve_draw_commands(size, context)
+                }).collect::<Vec<_>>();
+
+                commands
             }
             DrawCanvas(action) => {
                 let result = action(context, bounds);
 
-                self.paste_canvas(&result, bounds);
+                vec![DrawCommand::Text(bounds.clone(), result.to_string())]
             }
         }
-    }
-    
-    pub fn render_layout<Ctx: Clone>(&mut self, layout: &layout::Layout<Ctx>, context: &mut Ctx) {
-        let self_bounds = Rect::sized(self.size.width, self.size.height);
-        let layout = layout.resolve_size(&self_bounds, context);
-        let bounds = layout.sizing.fit_into(&self_bounds);
-
-        // New Step: Resolve to Draw Commands | Better Verb
-        // let draw_commands = layout.resolve_draw_commands(&bounds, context);
-
-        self.render(&layout, &bounds, context);
-    }
-
-    pub fn draw_on_buffer(&self) {
-        use std::io::Write;
-        let chars = self.contents.clone();
-        let mut stdout = std::io::stdout();
-        for n in 0..chars.len() {
-            let c = &chars[n];
-            let _ = crossterm::queue!(stdout, crossterm::style::Print(c.to_string()));
-    
-            if n < chars.len()-1 && (n + 1) % self.size.width == 0 {
-                let _ = crossterm::queue!(stdout, crossterm::cursor::MoveToNextLine(1) );
-            }
-        }
-    
-        let _ = stdout.flush();
-    }
-    
-    pub fn print(&self) {
-        use std::io::Write;
-        let chars = self.contents.clone();
-        let mut stdout = std::io::stdout();
-        for n in 0..chars.len() {
-            let c = &chars[n];
-            let _ = crossterm::queue!(stdout, crossterm::style::Print(c.to_string()));
-    
-            if n < chars.len()-1 && (n + 1) % self.size.width == 0 {
-                let _ = crossterm::queue!(stdout, crossterm::style::Print("\n".to_string()));
-            }
-        }
-    
-        let _ = stdout.flush();
-    }
-
-    pub fn to_string(&self) -> String {
-        let mut result = String::new();
-        for n in 0..self.contents.len() {
-            let c = &self.contents[n];
-            result.push_str(c);
-    
-            if n < self.contents.len()-1 && (n + 1) % self.size.width == 0 {
-                result.push_str("\n");
-            }
-        }
-    
-        result
     }
 }
