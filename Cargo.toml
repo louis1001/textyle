@@ -1,6 +1,6 @@
 [package]
 name = "textyle"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "A text-based declarative UI library inspired by SwiftUI"
 authors = ["louis1001 <contact@louis1001.dev>"]
