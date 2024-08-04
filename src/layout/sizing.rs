@@ -19,10 +19,28 @@ impl Sizing {
         }
     }
 
+    pub fn clamped_accumulate_constrained(&mut self, other: &Sizing, constraint: usize) {
+        *self = match self {
+            Sizing::Static(n) => {
+                let mut result = other.clone();
+                result.clamped_add_constrained(*n, constraint);
+
+                result
+            }
+            Sizing::Greedy(n) => {
+                Sizing::Greedy(*n + other.min_content_size())
+            }
+        }
+    }
+
     pub fn clamped_add(&mut self, n: usize) {
+        self.clamped_add_constrained(n, std::usize::MAX)
+    }
+
+    pub fn clamped_add_constrained(&mut self, n: usize, constraint: usize) {
         match self {
             Sizing::Static(sz) | Sizing::Greedy(sz) => {
-                *sz = sz.checked_add(n).unwrap_or(*sz);
+                *sz = sz.checked_add(n).unwrap_or(*sz).min(constraint);
             }
         };
     }

@@ -99,6 +99,7 @@ impl<Ctx: Clone> Layout<Ctx> {
                     height += sz.height;
                 }
 
+                // TODO: Introduce `Flexible` item sizing to handle better text sizing.
                 let sizing = sizing::ItemSizing::new(Static(width), Static(height));
 
                 SizedLayout::new(SizedNode::Text(t.clone()), sizing)
@@ -161,7 +162,7 @@ impl<Ctx: Clone> Layout<Ctx> {
 
                 let sizing = sizing::ItemSizing { horizontal: Greedy(min_width), vertical: content_size.vertical };
 
-                SizedLayout::new(SizedNode::HRightAlign(resolved), sizing)
+                SizedLayout::new(SizedNode::HLeftAlign(resolved), sizing)
             }
             Width(size, node) => {
                 let mut bounds = bounds.clone();
@@ -251,41 +252,49 @@ impl<Ctx: Clone> Layout<Ctx> {
                 let outer_bounds = bounds;
                 let mut resolved_content = node.resolve_size(outer_bounds, context);
                 let mut frame = resolved_content.sizing.clone();
+
+                let mut added_height = 0;
                 
                 if edges.contains(&alignment::Edge::Top) {
                     frame.vertical.clamped_add(*n);
+                    added_height += *n;
                 }
                 if edges.contains(&alignment::Edge::Bottom) {
                     frame.vertical.clamped_add(*n);
+                    added_height += *n;
                 }
 
                 if frame.vertical.min_content_size() > outer_bounds.height {
                     // recalculate with less space
                     let mut bounds = outer_bounds.clone();
-                    bounds.height = bounds.height.saturating_sub(*n);
+                    bounds.height = bounds.height.saturating_sub(added_height);
 
                     resolved_content = node.resolve_size(&bounds, context);
                     frame = resolved_content.sizing.clone();
 
-                    frame.vertical.clamped_add(*n);
+                    frame.vertical.clamped_add(added_height);
                 }
+
+                let mut added_width = 0;
 
                 if edges.contains(&alignment::Edge::Left) {
                     frame.horizontal.clamped_add(*n);
+                    added_width += *n;
                 }
                 if edges.contains(&alignment::Edge::Right) {
                     frame.horizontal.clamped_add(*n);
+                    added_width += *n;
                 }
 
                 if frame.horizontal.min_content_size() > outer_bounds.width {
                     // recalculate with less space
                     let mut bounds = outer_bounds.clone();
-                    bounds.width = bounds.width.saturating_sub(*n);
+                    bounds.width = bounds.width.saturating_sub(added_width);
 
                     resolved_content = node.resolve_size(&bounds, context);
                     frame = resolved_content.sizing.clone();
 
-                    frame.horizontal.clamped_add(*n);
+                    frame.horizontal.clamped_add(added_width);
                 }
 
                 SizedLayout::new(SizedNode::Border(*n, *c, edges.clone(), resolved_content), frame)
@@ -295,7 +304,7 @@ impl<Ctx: Clone> Layout<Ctx> {
                 let spacing_sizing = spacing * nodes.len().saturating_sub(1);
                 let mut result = sizing::ItemSizing { horizontal: Static(0), vertical: Static(spacing_sizing) };
                 let mut bounds = bounds.clone();
-                bounds.height -= spacing_sizing;
+                bounds.height = bounds.height.saturating_sub(spacing_sizing);
                 let mut resolved_children: Vec<SizedLayout<_>> = vec![];
 
                 for node in nodes {
@@ -312,7 +321,7 @@ impl<Ctx: Clone> Layout<Ctx> {
                         }
                     };
 
-                    result.vertical.clamped_accumulate(&node_sizing.vertical);
+                    result.vertical.clamped_accumulate_constrained(&node_sizing.vertical, bounds.height);
                     resolved_children.push(resolved_node);
                 }
 
@@ -339,7 +348,7 @@ impl<Ctx: Clone> Layout<Ctx> {
                         }
                     };
 
-                    result.horizontal.clamped_accumulate(&node_sizing.horizontal);
+                    result.horizontal.clamped_accumulate_constrained(&node_sizing.horizontal, bounds.width);
 
                     resolved_children.push(resolved_node);
                 }

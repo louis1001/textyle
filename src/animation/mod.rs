@@ -16,6 +16,16 @@ pub struct AnimationContext<State: AnimationState> {
 }
 
 pub type PlainAnimationContext = AnimationContext<()>;
+impl Default for PlainAnimationContext {
+    fn default() -> Self {
+        AnimationContext {
+            frame_count: 0,
+            delta_milis: 0.0,
+            state: (),
+            pending_events: vec![]
+        }
+    }
+}
 
 type AnimatedLayoutProvider<State> = fn(&AnimationContext<State>)->Layout<AnimationContext<State>>;
 pub struct AnimatedTextCanvas<State: AnimationState> {
@@ -92,6 +102,10 @@ impl<State: AnimationState> AnimatedTextCanvas<State> {
                     Ok(event) => {
                         if let crossterm::event::Event::Key(KeyEvent { code: crossterm::event::KeyCode::Esc, .. }) = event {
                             break;
+                        } else if let crossterm::event::Event::Key(KeyEvent { code: crossterm::event::KeyCode::Char('c'), modifiers, .. }) = event {
+                            if modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                                break;
+                            }
                         } else if let crossterm::event::Event::Resize(columns, rows) = event {
                             terminal_columns = columns as usize;
                             terminal_rows = rows as usize;

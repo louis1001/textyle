@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{layout, rendering::DrawCommand};
 
 use layout::geometry::{Rect, Size};
@@ -38,7 +40,7 @@ impl TextCanvas {
 }
 
 impl TextCanvas {
-    fn get_at(&self, x: usize, y: usize) -> Option<&str> {
+    pub fn get_at(&self, x: usize, y: usize) -> Option<&str> {
         if x >= self.size.width || y >= self.size.height {
             return None;
         }
@@ -56,7 +58,7 @@ impl TextCanvas {
         self.contents[index] = grapheme.to_string();
     }
 
-    fn draw_rect(&mut self, bounds: &Rect, grapheme: &str) {
+    pub fn draw_rect(&mut self, bounds: &Rect, grapheme: &str) {
         for x in bounds.x..(bounds.x + bounds.width as i64) {
             for y in bounds.y..(bounds.y + bounds.height as i64) {
                 if x < 0 || x >= self.size.width as i64 { continue; }
@@ -67,7 +69,7 @@ impl TextCanvas {
         }
     }
     
-    fn paste_canvas(&mut self, other: &TextCanvas, bounds: &Rect) {
+    pub fn paste_canvas(&mut self, other: &TextCanvas, bounds: &Rect) {
         assert_eq!(other.size.width, bounds.width);
         assert_eq!(other.size.height, bounds.height);
         
@@ -93,24 +95,85 @@ impl TextCanvas {
         for command in commands {
             match command {
                 DrawCommand:: Text(bounds, text) => {
-                    let mut graphemes = text.as_str().graphemes(true);
-                    for x in bounds.x..(bounds.x + bounds.width as i64) {
-                        for y in bounds.y..(bounds.y + bounds.height as i64) {
-                            if x < 0 || x >= self.size.width as i64 { continue; }
-                            if y < 0 || y >= self.size.height as i64 { continue; }
+                    let graphemes = text.as_str().graphemes(true)
+                    .collect::<Vec<_>>();
+                    
+                    let mut x = bounds.x as usize;
+                    let mut y = bounds.y as usize;
 
-                            // Fixme, ignore new lines because the bounds already account for them.
-                            let c = match graphemes.next() {
-                                None | Some(" ") => continue,
-                                Some(c) => c
-                            };
+                    let mut iter = graphemes.iter().peekable();
 
-                            self.write(c, x as usize, y as usize);
+                    while let Some(g) = iter.next() {
+                        if *g == "\n" {
+                            y += 1;
+                            x = bounds.x as usize;
+                            continue;
+                        } else if *g == " " {
+                            // don't write anything
+                        } else {
+                            self.write(g, x, y);
+                        }
+
+                        x += 1;
+                        if (x - bounds.x as usize) >= bounds.width {
+                            y += 1;
+                            x = bounds.x as usize;
+
+                            if let Some(next) = iter.peek() {
+                                if **next == "\n" {
+                                    iter.next();
+                                }
+                            }
                         }
                     }
                 }
-                DrawCommand::Rect(bounds, grapheme) => {
+                DrawCommand::FillRect(bounds, grapheme) => {
                     self.draw_rect(bounds, grapheme);
+                }
+                DrawCommand::StrokeRect(bounds, n, grapheme) => {
+                    // Top
+                    for x in bounds.x..(bounds.x + bounds.width as i64) {
+                        if x < 0 || x >= self.size.width as i64 { continue; }
+                        
+                        for y in 0..*n {
+                            let y_point = bounds.y + y as i64;
+                            if y_point < 0 || y_point >= self.size.height as i64 { continue; }
+                            self.write(grapheme, x as usize, y_point as usize);
+                        }
+                    }
+
+                    // Bottom
+                    for x in bounds.x..(bounds.x + bounds.width as i64) {
+                        if x < 0 || x >= self.size.width as i64 { continue; }
+                        
+                        for y in 0..*n {
+                            let y_point = bounds.y + bounds.height as i64 - y as i64 - 1;
+                            if y_point < 0 || y_point >= self.size.height as i64 { continue; }
+                            self.write(grapheme, x as usize, y_point as usize);
+                        }
+                    }
+
+                    // Left
+                    for y in bounds.y..(bounds.y + bounds.height as i64) {
+                        if y < 0 || y >= self.size.height as i64 { continue; }
+                        
+                        for x in 0..*n {
+                            let x_point = bounds.x + x as i64;
+                            if x_point < 0 || x_point >= self.size.width as i64 { continue; }
+                            self.write(grapheme, x_point as usize, y as usize);
+                        }
+                    }
+
+                    // Right
+                    for y in bounds.y..(bounds.y + bounds.height as i64) {
+                        if y < 0 || y >= self.size.height as i64 { continue; }
+                        
+                        for x in 0..*n {
+                            let x_point = bounds.x + bounds.width as i64 - x as i64 - 1;
+                            if x_point < 0 || x_point >= self.size.width as i64 { continue; }
+                            self.write(grapheme, x_point as usize, y as usize);
+                        }
+                    }
                 }
             }
         }
@@ -157,18 +220,19 @@ impl TextCanvas {
     
         let _ = stdout.flush();
     }
+}
 
-    pub fn to_string(&self) -> String {
-        let mut result = String::new();
+impl Display for TextCanvas {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for n in 0..self.contents.len() {
             let c = &self.contents[n];
-            result.push_str(c);
+            write!(f, "{c}")?;
     
             if n < self.contents.len()-1 && (n + 1) % self.size.width == 0 {
-                result.push('\n');
+                writeln!(f)?;
             }
         }
-    
-        result
+
+        Ok(())
     }
 }

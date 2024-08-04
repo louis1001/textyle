@@ -1,8 +1,10 @@
 use crate::layout::{self, geometry::Rect, SizedLayout};
 
+#[derive(Debug)]
 pub enum DrawCommand {
     Text(Rect, String),
-    Rect(Rect, String),
+    FillRect(Rect, String),
+    StrokeRect(Rect, usize, String),
 }
 
 impl<Ctx: Clone> SizedLayout<Ctx> {
@@ -108,7 +110,7 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
                 frame.y = bounds.y;
 
                 // self.draw_rect(bounds, &c.to_string());
-                let mut commands = vec![DrawCommand::Rect(bounds.clone(), c.to_string())];
+                let mut commands = vec![DrawCommand::FillRect(bounds.clone(), c.to_string())];
 
                 let content_commands = node.resolve_draw_commands(&frame, context);
 
@@ -144,31 +146,35 @@ impl<Ctx: Clone> SizedLayout<Ctx> {
 
                 let mut commands = node.resolve_draw_commands(&frame, context);
 
-                for edge in &edges {
-                    let command = match edge {
-                        layout::alignment::Edge::Top => {
-                            let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, outer_bounds.width, n);
-                            
-                            DrawCommand::Rect(line_bounds, c.to_string())
-                        }
-                        layout::alignment::Edge::Right => {
-                            let line_bounds = Rect::new(outer_bounds.max_x() - n as i64, outer_bounds.y, n, outer_bounds.height);
-                            
-                            DrawCommand::Rect(line_bounds, c.to_string())
-                        }
-                        layout::alignment::Edge::Bottom => {
-                            let line_bounds = Rect::new(outer_bounds.x, outer_bounds.max_y() - n as i64, outer_bounds.width, n);
-                            
-                            DrawCommand::Rect(line_bounds, c.to_string())
-                        }
-                        layout::alignment::Edge::Left => {
-                            let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, n, outer_bounds.height);
-                            
-                            DrawCommand::Rect(line_bounds, c.to_string())
-                        }
-                    };
+                if edges == layout::alignment::Edge::all() {
+                    commands.push(DrawCommand::StrokeRect(outer_bounds.clone(), n, c.to_string()));
+                } else {
+                    for edge in &edges {
+                        let command = match edge {
+                            layout::alignment::Edge::Top => {
+                                let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, outer_bounds.width, n);
+                                
+                                DrawCommand::FillRect(line_bounds, c.to_string())
+                            }
+                            layout::alignment::Edge::Right => {
+                                let line_bounds = Rect::new(outer_bounds.max_x() - n as i64, outer_bounds.y, n, outer_bounds.height);
+                                
+                                DrawCommand::FillRect(line_bounds, c.to_string())
+                            }
+                            layout::alignment::Edge::Bottom => {
+                                let line_bounds = Rect::new(outer_bounds.x, outer_bounds.max_y() - n as i64, outer_bounds.width, n);
+                                
+                                DrawCommand::FillRect(line_bounds, c.to_string())
+                            }
+                            layout::alignment::Edge::Left => {
+                                let line_bounds = Rect::new(outer_bounds.x, outer_bounds.y, n, outer_bounds.height);
+                                
+                                DrawCommand::FillRect(line_bounds, c.to_string())
+                            }
+                        };
 
-                    commands.push(command);
+                        commands.push(command);
+                    }
                 }
 
                 commands
