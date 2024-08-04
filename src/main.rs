@@ -1,5 +1,5 @@
 use anyhow::Result;
-use textyle::{animation::{AnimatedTextCanvas, PlainAnimationContext}, canvas::TextCanvas, hash_set, layout::{alignment::{Edge, HorizontalAlignment}, geometry::Size, Layout}};
+use textyle::{animation::{AnimatedTextCanvas, PlainAnimationContext}, canvas::TextCanvas, hash_set, layout::{alignment::{Edge, HorizontalAlignment}, Layout}};
 
 fn main() -> Result<()> {
     let canvas = AnimatedTextCanvas::new(app);

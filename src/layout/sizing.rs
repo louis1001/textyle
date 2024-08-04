@@ -34,7 +34,7 @@ impl Sizing {
     }
 
     pub fn clamped_add(&mut self, n: usize) {
-        self.clamped_add_constrained(n, std::usize::MAX)
+        self.clamped_add_constrained(n, usize::MAX)
     }
 
     pub fn clamped_add_constrained(&mut self, n: usize, constraint: usize) {
