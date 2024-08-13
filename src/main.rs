@@ -1,12 +1,30 @@
 use anyhow::Result;
-use textyle::{animation::{AnimatedTextCanvas, PlainAnimationContext}, canvas::TextCanvas, hash_set, layout::{alignment::{Edge, HorizontalAlignment}, Layout}};
+use textyle::{animation::{AnimatedTextCanvas, AnimationBuffer, AnimationCommand, AnimationEvent, AnimationRunConfig, KeyCode, KeyModifiers, PlainAnimationContext}, canvas::TextCanvas, hash_set, layout::{alignment::{Edge, HorizontalAlignment}, Layout}};
 
 fn main() -> Result<()> {
-    let canvas = AnimatedTextCanvas::new(app);
+    let mut canvas = AnimatedTextCanvas::new(app);
 
-    canvas.run()?;
+    canvas.set_update(app_update);
+
+    let config = AnimationRunConfig{
+        buffer_type: AnimationBuffer::Alternate
+    };
+
+    canvas.run(config)?;
 
     Ok(())
+}
+
+fn app_update(ctx: &mut PlainAnimationContext) {
+    while let Some(event) = ctx.pending_events.pop() {
+        if let AnimationEvent::KeyEvent(e, modifiers) = event {
+            if modifiers.contains(KeyModifiers::CONTROL) {
+                if let KeyCode::Char(' ') = e {
+                    ctx.add_command(AnimationCommand::Quit);
+                }
+            }
+        }
+    }
 }
 
 fn pixel_shader(ctx: &PlainAnimationContext, aspect_ratio: f64, u: f64, v: f64) -> &'static str {

@@ -7,12 +7,27 @@ use defer_lite::defer;
 pub trait AnimationState: Clone {}
 impl <T: Clone> AnimationState for T {}
 
+pub type KeyCode = crossterm::event::KeyCode;
+pub type KeyModifiers = crossterm::event::KeyModifiers;
+
+#[derive(Clone)]
+pub enum AnimationEvent {
+    KeyEvent(KeyCode, KeyModifiers),
+    Resize(usize, usize)
+}
+
+#[derive(Clone)]
+pub enum AnimationCommand {
+    Quit
+}
+
 #[derive(Clone)]
 pub struct AnimationContext<State: AnimationState> {
     pub frame_count: usize,
     pub delta_milis: f64,
     pub state: State,
-    pub pending_events: Vec<crossterm::event::Event>
+    pub pending_events: Vec<AnimationEvent>,
+    pub commands: Vec<AnimationCommand>
 }
 
 pub type PlainAnimationContext = AnimationContext<()>;
@@ -22,9 +37,33 @@ impl Default for PlainAnimationContext {
             frame_count: 0,
             delta_milis: 0.0,
             state: (),
-            pending_events: vec![]
+            pending_events: vec![],
+            commands: vec![]
         }
     }
+}
+
+impl<T: Clone> AnimationContext<T> {
+    pub fn add_command(&mut self, command: AnimationCommand) {
+        self.commands.push(command)
+    }
+}
+
+#[derive(PartialEq)]
+pub enum AnimationBuffer {
+    Main,
+    Alternate
+}
+
+impl Default for AnimationBuffer {
+    fn default() -> Self {
+        Self::Main
+    }
+}
+
+#[derive(Default)]
+pub struct AnimationRunConfig {
+    pub buffer_type: AnimationBuffer
 }
 
 type AnimatedLayoutProvider<State> = fn(&AnimationContext<State>)->Layout<AnimationContext<State>>;
@@ -52,7 +91,7 @@ impl<State: AnimationState> AnimatedTextCanvas<State> {
         AnimatedTextCanvas { layout, update: |_|{} }
     }
 
-    pub fn run_with_state(&self, state: State) -> Result<()> {
+    pub fn run_with_state(&self, state: State, config: AnimationRunConfig) -> Result<()> {
         let mut stdout = std::io::stdout();
 
         let (terminal_columns, terminal_rows ) = crossterm::terminal::size().unwrap();
@@ -68,7 +107,8 @@ impl<State: AnimationState> AnimatedTextCanvas<State> {
             frame_count: 0,
             delta_milis: 0.0,
             state,
-            pending_events: vec![]
+            pending_events: vec![],
+            commands: vec![]
         };
 
         let layout = (self.layout)(&mut context);
@@ -82,17 +122,39 @@ impl<State: AnimationState> AnimatedTextCanvas<State> {
 
         let mut last_time = std::time::Instant::now();
 
-        crossterm::execute!(stdout, /*crossterm::terminal::EnterAlternateScreen, */ crossterm::cursor::Hide)?;
+        if config.buffer_type == AnimationBuffer::Alternate {
+            crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
+        }
+
+        defer!{
+            if config.buffer_type == AnimationBuffer::Alternate {
+                crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen)
+                .unwrap_or_else(|err| { println!("Error exiting alternate screen buffer:\n{err}"); });
+            }
+        }
+
+        crossterm::execute!(stdout, crossterm::cursor::Hide)?;
         
         defer!{
-            crossterm::execute!(std::io::stdout(), /*crossterm::terminal::LeaveAlternateScreen, */ crossterm::cursor::Show)
-                .unwrap_or_else(|err| {
-                    println!("Error exiting alternate screen buffer:\n{err}");
-                });
+            crossterm::execute!(std::io::stdout(), crossterm::cursor::Show)
+                .unwrap_or_else(|err| { println!("Error restoring cursor state:\n{err}"); });
         }
 
         loop {
             (self.update)(&mut context);
+
+            let mut should_stop = false;
+
+            for command in &context.commands {
+                match command {
+                    AnimationCommand::Quit => {
+                        should_stop = true;
+                    }
+                }
+            }
+
+            if should_stop { break; }
+
             context.delta_milis = last_time.elapsed().as_secs_f64().clamp(0.000001, f64::MAX) * 1000.0;
             last_time = std::time::Instant::now();
             canvas.draw_on_buffer();
@@ -112,8 +174,9 @@ impl<State: AnimationState> AnimatedTextCanvas<State> {
         
                             let bounds = &Size::new(terminal_columns, terminal_rows);
                             canvas = TextCanvas::create_in_bounds(bounds);
-                        } else {
-                            context.pending_events.push(event);
+                            context.pending_events.push(AnimationEvent::Resize(terminal_columns, terminal_rows));
+                        } else if let crossterm::event::Event::Key(e) = event {
+                            context.pending_events.push(AnimationEvent::KeyEvent(e.code, e.modifiers));
                         }
                     }
                     Err(err) => {
@@ -137,7 +200,7 @@ impl<State: AnimationState> AnimatedTextCanvas<State> {
 }
 
 impl AnimatedTextCanvas<()> {
-    pub fn run(&self) -> Result<()> {
-        self.run_with_state(())
+    pub fn run(&self, config: AnimationRunConfig) -> Result<()> {
+        self.run_with_state((), config)
     }
 }
